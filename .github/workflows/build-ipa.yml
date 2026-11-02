@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-ipa:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -18,13 +18,14 @@ jobs:
 
       - name: Select Xcode
         run: |
-          if [ -d "/Applications/Xcode_16.2.app" ]; then
-            echo "DEVELOPER_DIR=/Applications/Xcode_16.2.app/Contents/Developer" >> "$GITHUB_ENV"
-          elif [ -d "/Applications/Xcode_16.1.app" ]; then
-            echo "DEVELOPER_DIR=/Applications/Xcode_16.1.app/Contents/Developer" >> "$GITHUB_ENV"
-          else
-            echo "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer" >> "$GITHUB_ENV"
+          echo "Installed Xcodes:"
+          ls -1d /Applications/Xcode*.app 2>/dev/null || true
+          xcode_app=$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort -V | tail -n 1)
+          if [ -z "$xcode_app" ]; then
+            xcode_app=/Applications/Xcode.app
           fi
+          echo "Using $xcode_app"
+          echo "DEVELOPER_DIR=$xcode_app/Contents/Developer" >> "$GITHUB_ENV"
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
