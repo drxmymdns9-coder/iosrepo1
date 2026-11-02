@@ -20,7 +20,7 @@ jobs:
         run: |
           echo "Installed Xcodes:"
           ls -1d /Applications/Xcode*.app 2>/dev/null || true
-          xcode_app=/Applications/Xcode_16.2.app
+          xcode_app=/Applications/Xcode_16.4.app
           if [ ! -d "$xcode_app" ]; then
             xcode_app=/Applications/Xcode.app
           fi
