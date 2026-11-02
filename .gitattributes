@@ -1,0 +1,3 @@
+*.bin binary
+*.gz binary
+Tests/AnililiCoreTests/Fixtures/gzip/** binary

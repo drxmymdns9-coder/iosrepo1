@@ -1,0 +1,37 @@
+version: 1
+bundleID: com.anilili.ios
+product: Anilili
+iconPath: Resources/AppIcon.png
+infoPath: Resources/Info.plist
+# Alternate app icons (scripts/generate_icon_variants.py): iOS reads them from the bundle root.
+resources:
+  - Resources/AppIcons/AppIcon-blood_red@2x.png
+  - Resources/AppIcons/AppIcon-blood_red@2x~ipad.png
+  - Resources/AppIcons/AppIcon-blood_red@3x.png
+  - Resources/AppIcons/AppIcon-cyan@2x.png
+  - Resources/AppIcons/AppIcon-cyan@2x~ipad.png
+  - Resources/AppIcons/AppIcon-cyan@3x.png
+  - Resources/AppIcons/AppIcon-emerald@2x.png
+  - Resources/AppIcons/AppIcon-emerald@2x~ipad.png
+  - Resources/AppIcons/AppIcon-emerald@3x.png
+  - Resources/AppIcons/AppIcon-gold@2x.png
+  - Resources/AppIcons/AppIcon-gold@2x~ipad.png
+  - Resources/AppIcons/AppIcon-gold@3x.png
+  - Resources/AppIcons/AppIcon-monochrome@2x.png
+  - Resources/AppIcons/AppIcon-monochrome@2x~ipad.png
+  - Resources/AppIcons/AppIcon-monochrome@3x.png
+  - Resources/AppIcons/AppIcon-neon_green@2x.png
+  - Resources/AppIcons/AppIcon-neon_green@2x~ipad.png
+  - Resources/AppIcons/AppIcon-neon_green@3x.png
+  - Resources/AppIcons/AppIcon-ocean_blue@2x.png
+  - Resources/AppIcons/AppIcon-ocean_blue@2x~ipad.png
+  - Resources/AppIcons/AppIcon-ocean_blue@3x.png
+  - Resources/AppIcons/AppIcon-purple@2x.png
+  - Resources/AppIcons/AppIcon-purple@2x~ipad.png
+  - Resources/AppIcons/AppIcon-purple@3x.png
+  - Resources/AppIcons/AppIcon-sakura_pink@2x.png
+  - Resources/AppIcons/AppIcon-sakura_pink@2x~ipad.png
+  - Resources/AppIcons/AppIcon-sakura_pink@3x.png
+  - Resources/AppIcons/AppIcon-sunset_orange@2x.png
+  - Resources/AppIcons/AppIcon-sunset_orange@2x~ipad.png
+  - Resources/AppIcons/AppIcon-sunset_orange@3x.png

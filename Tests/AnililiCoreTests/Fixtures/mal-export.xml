@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<myanimelist>
+	<myinfo>
+		<user_id>1</user_id>
+		<user_name>sample</user_name>
+		<user_export_type>1</user_export_type>
+	</myinfo>
+	<anime>
+		<series_animedb_id>52991</series_animedb_id>
+		<series_title><![CDATA[Sousou no Frieren]]></series_title>
+		<series_type>TV</series_type>
+		<series_episodes>28</series_episodes>
+		<my_watched_episodes>28</my_watched_episodes>
+		<my_status>Completed</my_status>
+	</anime>
+	<anime>
+		<series_animedb_id>21</series_animedb_id>
+		<series_title><![CDATA[One Piece]]></series_title>
+		<my_watched_episodes>1071</my_watched_episodes>
+		<my_status>1</my_status>
+	</anime>
+	<anime>
+		<series_animedb_id>52991</series_animedb_id>
+		<series_title><![CDATA[Sousou no Frieren (again)]]></series_title>
+		<my_status>Dropped</my_status>
+	</anime>
+	<anime>
+		<series_title><![CDATA[No id]]></series_title>
+		<my_status>Watching</my_status>
+	</anime>
+	<anime>
+		<series_animedb_id>5114</series_animedb_id>
+		<series_title><![CDATA[Fullmetal Alchemist: Brotherhood]]></series_title>
+		<my_watched_episodes></my_watched_episodes>
+		<my_status>Plan to Watch</my_status>
+	</anime>
+</myanimelist>
