@@ -250,11 +250,9 @@ struct RootView: View {
 private struct TabBarMinimizes: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
-            content.tabBarMinimizeBehavior(AppearanceStore.shared.staticChrome ? .never : .onScrollDown)
-        } else {
-            content
-        }
+        // The iOS 26 tab-bar minimization API is not present in the iOS 18 SDK.
+        // Keep the modifier as a no-op so the project remains buildable with Xcode 16.
+        content
     }
 }
 

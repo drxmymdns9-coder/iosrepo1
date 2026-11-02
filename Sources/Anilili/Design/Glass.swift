@@ -17,13 +17,10 @@ struct GlassSurface<S: InsettableShape>: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         let live = AppearanceStore.shared.glassEnabled(section)
-        if live, #available(iOS 26, *) {
-            content
-                .clipShape(shape)
-                .glassEffect(.regular.tint((tint ?? palette.panel2).opacity(0.45)).interactive(interactive), in: shape)
-        } else {
-            frosted(content, live: live)
-        }
+        // Keep the implementation on APIs available in the package's iOS 18 deployment target.
+        // Newer SDKs may provide Liquid Glass, but referencing that API would make Xcode 16
+        // unable to compile the project at all. The material fallback is supported on every target.
+        frosted(content, live: live)
     }
 
     private func frosted(_ content: Content, live: Bool) -> some View {
@@ -78,13 +75,7 @@ struct SmokedGlass<S: Shape>: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         let live = AppearanceStore.shared.glassEnabled(section)
-        if live, #available(iOS 26, *) {
-            content
-                .clipShape(shape)
-                .glassEffect(.regular.tint(Color.black.opacity(liveTint)), in: shape)
-        } else {
-            smoked(content, live: live)
-        }
+        smoked(content, live: live)
     }
 
     private func smoked(_ content: Content, live: Bool) -> some View {
