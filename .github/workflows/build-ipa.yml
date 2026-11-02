@@ -1,0 +1,45 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select available Xcode
+        run: |
+          if [ -d "/Applications/Xcode_16.4.app" ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer" >> "$GITHUB_ENV"
+          elif [ -d "/Applications/Xcode_16.3.app" ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode_16.3.app/Contents/Developer" >> "$GITHUB_ENV"
+          else
+            echo "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer" >> "$GITHUB_ENV"
+          fi
+          xcodebuild -version
+
+      - name: Install xtool
+        run: brew install xtool-org/tap/xtool
+
+      - name: Build unsigned IPA
+        run: scripts/build-ipa.sh release
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Anilili-iOS-unsigned-IPA
+          path: xtool/Anilili.ipa
+          if-no-files-found: error
+          retention-days: 14
