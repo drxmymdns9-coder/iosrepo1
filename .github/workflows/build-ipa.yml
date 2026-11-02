@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-ipa:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -20,8 +20,11 @@ jobs:
         run: |
           echo "Installed Xcodes:"
           ls -1d /Applications/Xcode*.app 2>/dev/null || true
-          xcode_app=$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort -V | tail -n 1)
-          if [ -z "$xcode_app" ]; then
+          xcode_app=/Applications/Xcode_26.6.app
+          if [ ! -d "$xcode_app" ]; then
+            xcode_app=/Applications/Xcode_26.5.app
+          fi
+          if [ ! -d "$xcode_app" ]; then
             xcode_app=/Applications/Xcode.app
           fi
           echo "Using $xcode_app"
