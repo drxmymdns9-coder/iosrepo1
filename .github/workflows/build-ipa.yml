@@ -8,33 +8,57 @@ on:
 permissions:
   contents: read
 
-env:
-  DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-
 jobs:
   build-ipa:
-    runs-on: macos-15
-    timeout-minutes: 45
+    runs-on: macos-14
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select available Xcode
+      - name: Select Xcode
         run: |
-          if [ -d "/Applications/Xcode_16.4.app" ]; then
-            echo "DEVELOPER_DIR=/Applications/Xcode_16.4.app/Contents/Developer" >> "$GITHUB_ENV"
-          elif [ -d "/Applications/Xcode_16.3.app" ]; then
-            echo "DEVELOPER_DIR=/Applications/Xcode_16.3.app/Contents/Developer" >> "$GITHUB_ENV"
+          if [ -d "/Applications/Xcode_16.2.app" ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode_16.2.app/Contents/Developer" >> "$GITHUB_ENV"
+          elif [ -d "/Applications/Xcode_16.1.app" ]; then
+            echo "DEVELOPER_DIR=/Applications/Xcode_16.1.app/Contents/Developer" >> "$GITHUB_ENV"
           else
             echo "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer" >> "$GITHUB_ENV"
           fi
           xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
 
       - name: Install xtool
         run: brew install xtool-org/tap/xtool
 
-      - name: Build unsigned IPA
-        run: scripts/build-ipa.sh release
+      - name: Generate Xcode project
+        run: |
+          set -euxo pipefail
+          xtool dev generate-xcode-project
+          test -f xtool/Anilili.xcworkspace/contents.xcworkspacedata
+
+      - name: Build unsigned app
+        run: |
+          set -euxo pipefail
+          mkdir -p .build/xcode
+          xcodebuild \
+            -workspace xtool/Anilili.xcworkspace \
+            -scheme Anilili-App \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -derivedDataPath .build/xcode \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee xcodebuild.log
+
+      - name: Package IPA
+        run: |
+          set -euxo pipefail
+          app=$(find .build/xcode/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
+          test -n "$app"
+          mkdir -p xtool/ipa/Payload
+          cp -R "$app" xtool/ipa/Payload/
+          (cd xtool/ipa && zip -qryX ../Anilili.ipa Payload)
+          test -s xtool/Anilili.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
@@ -42,4 +66,13 @@ jobs:
           name: Anilili-iOS-unsigned-IPA
           path: xtool/Anilili.ipa
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+          if-no-files-found: ignore
           retention-days: 14
