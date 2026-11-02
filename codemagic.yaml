@@ -1,0 +1,42 @@
+workflows:
+  ios-unsigned-ipa:
+    name: Anilili iOS unsigned IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: 16.4
+    scripts:
+      - name: Install xtool
+        script: |
+          set -euxo pipefail
+          brew install xtool-org/tap/xtool
+      - name: Generate Xcode project
+        script: |
+          set -euxo pipefail
+          xtool dev generate-xcode-project
+          test -f xtool/Anilili.xcworkspace/contents.xcworkspacedata
+      - name: Build unsigned app
+        script: |
+          set -euxo pipefail
+          mkdir -p .build/xcode
+          xcodebuild \
+            -workspace xtool/Anilili.xcworkspace \
+            -scheme Anilili-App \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -derivedDataPath .build/xcode \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee xcodebuild.log
+      - name: Package unsigned IPA
+        script: |
+          set -euxo pipefail
+          app=$(find .build/xcode/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
+          test -n "$app"
+          rm -rf build/ios/ipa
+          mkdir -p build/ios/ipa/Payload
+          cp -R "$app" build/ios/ipa/Payload/
+          (cd build/ios/ipa && zip -qryX ../Anilili-unsigned.ipa Payload)
+          test -s build/ios/Anilili-unsigned.ipa
+    artifacts:
+      - build/ios/Anilili-unsigned.ipa
+      - xcodebuild.log
