@@ -91,8 +91,13 @@ public enum DownloadQueue {
     /// The rest stay behind it, so a pick that has stopped answering still gets the episode saved.
     public static func attempts(_ sources: [VideoSource], preferring label: String?) -> [VideoSource] {
         let saveable = sources.filter(ServerSummary.canDownload)
-        guard let label, let index = saveable.firstIndex(where: { $0.label == label }) else { return saveable }
-        var rest = saveable
+        // The episode-row download button has no server picker, so prefer a real soft-sub source
+        // and keep hard-sub sources as fallback. A source explicitly chosen in the server sheet
+        // still wins over this default ordering.
+        var ordered = saveable.filter { $0.softSub && !$0.subtitles.isEmpty }
+        ordered += saveable.filter { !($0.softSub && !$0.subtitles.isEmpty) }
+        guard let label, let index = ordered.firstIndex(where: { $0.label == label }) else { return ordered }
+        var rest = ordered
         let picked = rest.remove(at: index)
         return [picked] + rest
     }

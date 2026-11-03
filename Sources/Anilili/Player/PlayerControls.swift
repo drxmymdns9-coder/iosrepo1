@@ -393,9 +393,9 @@ struct PlayerOverlay: View {
                     .layoutPriority(1)
                     .padding(.trailing, 6)
                 }
-                if !engine.subtitleTracks.isEmpty {
-                    iconButton(engine.selectedSubtitle == nil ? "captions.bubble" : "captions.bubble.fill", label: "Subtitles") { onSubtitles() }
-                }
+                // Keep this visible even for hard-sub or downloaded videos with no sidecar track:
+                // the subtitle sheet is also where the viewer imports an SRT/VTT/ASS file.
+                iconButton(engine.selectedSubtitle == nil ? "captions.bubble" : "captions.bubble.fill", label: "Subtitles") { onSubtitles() }
                 iconButton("server.rack", label: "Servers") { onSources() }
                 if canToggleFullscreen {
                     iconButton(fullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
