@@ -43,11 +43,10 @@ public enum ServerSummary {
         return normalizeLanguage(String(provider[provider.index(after: open)..<close]))
     }
 
-    /// Whether the downloader can save from this server: it saves streams with the subtitles in
-    /// the picture, so a soft-sub server's video would arrive without them, and a web player has no
-    /// stream to save at all.
+    /// Whether the downloader can save from this server. Soft-sub streams are now saved together
+    /// with their selected sidecar subtitle; web players still have no downloadable stream.
     public static func canDownload(_ source: VideoSource) -> Bool {
-        !source.softSub && source.kind != .embed
+        source.kind != .embed
     }
 
     /// How a server carries the episode, as a person would say it (Android's `spokenLabel`).

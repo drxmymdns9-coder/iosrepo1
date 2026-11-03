@@ -31,6 +31,8 @@ public struct DownloadRecord: Codable, Identifiable, Hashable, Sendable {
     /// The server the viewer picked to save from (a `VideoSource.label`), tried before the rest;
     /// nil lets the queue choose.
     public var preferredSource: String?
+    /// Optional subtitle file saved beside the video for soft-sub sources.
+    public var subtitleFile: String?
     public var bytes: Int64
     public var duration: Double?
     public var createdAt: Date
@@ -42,6 +44,7 @@ public struct DownloadRecord: Codable, Identifiable, Hashable, Sendable {
         self.episodeTitle = episodeTitle
         self.thumbnail = thumbnail
         self.state = .queued
+        self.subtitleFile = nil
         self.bytes = 0
         self.createdAt = createdAt
     }
@@ -78,12 +81,10 @@ public enum DownloadQueue {
             .map { $0 }
     }
 
-    /// The batch download's menu item. A sub download is always hard sub here — Android and the
-    /// desktop have a "Hard subs only" switch, but this app saves no subtitle files, so a soft-sub
-    /// server is never saved from (`ServerSummary.canDownload`) — and the label says so, for the
-    /// viewer who came looking for that switch.
+    /// The batch download's menu item. Sub and dub sources can both be saved; soft-sub sources
+    /// carry their selected subtitle beside the video.
     public static func batchLabel(count: Int, audio: AudioTrack) -> String {
-        "Download \(count) episode\(count == 1 ? "" : "s") (\(audio == .sub ? "hard sub" : audio.label))"
+        "Download \(count) episode\(count == 1 ? "" : "s") (\(audio.label))"
     }
 
     /// The servers a download tries, in order: the saveable ones, the one the viewer picked first.

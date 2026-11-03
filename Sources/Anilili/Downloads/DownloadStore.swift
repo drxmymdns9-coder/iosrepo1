@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import AVFoundation
 import AnililiCore
 import Foundation
 import Observation
@@ -25,6 +26,13 @@ enum DownloadPaths {
 @Observable
 final class DownloadStore {
     static let shared = DownloadStore()
+
+    private struct SaveResult {
+        var bytes: Int64
+        var duration: Double?
+        var kind: DownloadRecord.Kind
+        var subtitleFile: String?
+    }
 
     /// Android's `download_quality`: "best", "1080", "720", "480", "360".
     static let qualityKey = "download_quality"
@@ -128,9 +136,14 @@ final class DownloadStore {
             save()
             return nil
         }
+        let subtitle: [SubtitleTrack] = record.subtitleFile.flatMap { name in
+            let subtitleURL = DownloadPaths.root.appendingPathComponent(record.folder).appendingPathComponent(name)
+            return FileManager.default.fileExists(atPath: subtitleURL.path)
+                ? [SubtitleTrack(url: subtitleURL, label: "Downloaded subtitle", language: "ar")] : []
+        } ?? []
         switch kind {
         case .mp4:
-            return VideoSource(url: DownloadPaths.root.appendingPathComponent(path), provider: "Downloaded", server: record.source ?? "This device", kind: .mp4)
+            return VideoSource(url: DownloadPaths.root.appendingPathComponent(path), provider: "Downloaded", server: record.source ?? "This device", kind: .mp4, subtitles: subtitle, softSub: !subtitle.isEmpty)
         case .hls:
             if !checked.contains(record.id) {
                 let folder = DownloadPaths.root.appendingPathComponent(record.folder, isDirectory: true)
@@ -142,7 +155,7 @@ final class DownloadStore {
                 checked.insert(record.id)
             }
             guard let url = try? await LocalMediaServer.shared.url(for: path) else { return nil }
-            return VideoSource(url: url, provider: "Downloaded", server: record.source ?? "This device", kind: .hls)
+            return VideoSource(url: url, provider: "Downloaded", server: record.source ?? "This device", kind: .hls, subtitles: subtitle, softSub: !subtitle.isEmpty)
         }
     }
 
@@ -182,13 +195,13 @@ final class DownloadStore {
         do {
             let found = try await SourceHub.shared.sources(for: record.media, episode: record.episode, audio: record.audio)
             let sources = DownloadQueue.attempts(found, preferring: record.preferredSource)
-            guard !sources.isEmpty else { throw HTTPError("No server has a hard-subbed copy to save.") }
+            guard !sources.isEmpty else { throw HTTPError("No downloadable video source was found.") }
             var lastError: Error?
             for source in sources {
                 guard !Task.isCancelled else { return }
                 do {
                     Log.info("downloads", "\(id): saving from \(source.label)")
-                    let result: (bytes: Int64, duration: Double?)
+                    let result: SaveResult
                     switch source.kind {
                     case .hls: result = try await saveHLS(source, to: folder, id: id)
                     case .mp4: result = try await saveMP4(source, to: folder, id: id)
@@ -198,10 +211,11 @@ final class DownloadStore {
                     guard !Task.isCancelled else { return }
                     update(id) {
                         $0.state = .done
-                        $0.kind = source.kind == .hls ? .hls : .mp4
+                        $0.kind = result.kind
                         $0.source = source.label
                         $0.bytes = result.bytes
                         $0.duration = result.duration
+                        $0.subtitleFile = result.subtitleFile
                     }
                     save()
                     Log.info("downloads", "\(id): saved \(DownloadQueue.size(result.bytes)) from \(source.label)")
@@ -229,7 +243,7 @@ final class DownloadStore {
         return all
     }
 
-    private func saveHLS(_ source: VideoSource, to folder: URL, id: String) async throws -> (bytes: Int64, duration: Double?) {
+    private func saveHLS(_ source: VideoSource, to folder: URL, id: String) async throws -> SaveResult {
         let headers = headers(source)
         let top = try await HTTP.text(source.url, headers: headers)
         var playlistURL = source.url
@@ -273,7 +287,11 @@ final class DownloadStore {
             }
         }
         try Data(plan.playlist.utf8).write(to: folder.appendingPathComponent("index.m3u8"), options: .atomic)
-        return (bytes, plan.duration > 0 ? plan.duration : nil)
+        let subtitleFile = try? await saveSubtitle(source, to: folder)
+        if let converted = try? await convertHLS(folder: folder, id: id), converted {
+            return SaveResult(bytes: fileSize(folder.appendingPathComponent("episode.mp4")), duration: plan.duration > 0 ? plan.duration : nil, kind: .mp4, subtitleFile: subtitleFile)
+        }
+        return SaveResult(bytes: bytes + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: plan.duration > 0 ? plan.duration : nil, kind: .hls, subtitleFile: subtitleFile)
     }
 
     /// Which server and playlist a folder's files came from (`saveHLS`).
@@ -315,7 +333,7 @@ final class DownloadStore {
         }
     }
 
-    private func saveMP4(_ source: VideoSource, to folder: URL, id: String) async throws -> (bytes: Int64, duration: Double?) {
+    private func saveMP4(_ source: VideoSource, to folder: URL, id: String) async throws -> SaveResult {
         var request = URLRequest(url: source.url)
         for (name, value) in headers(source) { request.setValue(value, forHTTPHeaderField: name) }
         let reporter = DownloadProgress { [weak self] fraction in
@@ -329,7 +347,57 @@ final class DownloadStore {
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: temporary, to: target)
         let size = (try? FileManager.default.attributesOfItem(atPath: target.path))?[.size] as? Int64 ?? 0
-        return (size, nil)
+        let subtitleFile = try? await saveSubtitle(source, to: folder)
+        return SaveResult(bytes: size + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: nil, kind: .mp4, subtitleFile: subtitleFile)
+    }
+
+    /// Selects Arabic first, then English, and saves one sidecar subtitle for a soft-sub source.
+    private func saveSubtitle(_ source: VideoSource, to folder: URL) async throws -> String? {
+        guard source.softSub, let track = source.subtitles.first(where: {
+            $0.language.lowercased().hasPrefix("ar") || $0.label.localizedCaseInsensitiveContains("arab") || $0.label.contains("عرب")
+        }) ?? source.subtitles.first(where: { $0.language.lowercased().hasPrefix("en") }) ?? source.subtitles.first else { return nil }
+        let data = try await HTTP.data(track.url, headers: headers(source)).0
+        guard !data.isEmpty else { return nil }
+        let ext = track.url.pathExtension.lowercased()
+        let name = "subtitle.\(ext == "vtt" || ext == "ass" || ext == "ssa" ? ext : "srt")"
+        try data.write(to: folder.appendingPathComponent(name), options: .atomic)
+        return name
+    }
+
+    /// Converts the completed local HLS playlist to one MP4. HLS remains the fallback if the
+    /// system exporter cannot handle a particular encrypted or fragmented playlist.
+    private func convertHLS(folder: URL, id: String) async throws -> Bool {
+        let playlist = try await LocalMediaServer.shared.url(for: "\(folder.lastPathComponent)/index.m3u8")
+        let asset = AVURLAsset(url: playlist)
+        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else { return false }
+        let output = folder.appendingPathComponent("episode.mp4")
+        try? FileManager.default.removeItem(at: output)
+        exporter.outputURL = output
+        exporter.outputFileType = .mp4
+        exporter.shouldOptimizeForNetworkUse = false
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            exporter.exportAsynchronously {
+                switch exporter.status {
+                case .completed: continuation.resume()
+                case .failed, .cancelled: continuation.resume(throwing: exporter.error ?? HTTPError("HLS to MP4 conversion failed"))
+                default: continuation.resume(throwing: HTTPError("HLS export did not complete"))
+                }
+            }
+        }
+        let size = fileSize(output)
+        guard size > 0 else { return false }
+        let keep = Set(["episode.mp4", "subtitle.srt", "subtitle.vtt", "subtitle.ass", "subtitle.ssa"])
+        for file in (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [] where !keep.contains(file.lastPathComponent) {
+            try? FileManager.default.removeItem(at: file)
+        }
+        Log.info("downloads", "\(id): converted HLS to one MP4 (\(DownloadQueue.size(size)))")
+        return true
+    }
+
+    private func fileSize(_ url: URL) -> Int64 {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber else { return 0 }
+        return size.int64Value
     }
 
     /// Long transfers: a whole episode can take minutes.

@@ -111,6 +111,12 @@ public enum Subtitles {
     /// Downloads and parses a track with the server's headers (most subtitle hosts refuse a bare
     /// request, as their video CDNs do).
     public static func load(_ track: SubtitleTrack, headers: [String: String]) async throws -> [SubtitleCue] {
+        if track.url.isFileURL {
+            let text = try String(contentsOf: track.url, encoding: .utf8)
+            let cues = parse(text)
+            Log.info("subtitles", "\(track.label): \(cues.count) local cues")
+            return cues
+        }
         var all = headers
         all["User-Agent"] = all["User-Agent"] ?? HTTP.safariUserAgent
         let text = try await HTTP.text(track.url, headers: all)

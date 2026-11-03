@@ -71,7 +71,7 @@ Legend: ✅ done · 🟡 partial · ⏳ planned (phase) · ➖ not applicable on
 | Gestures: double-tap seek, hold for speed, brightness/volume, drag to seek, lock | ✅ | Volume through the system's hidden slider, mounted only during a drag so the side buttons keep the system's indicator; vertical drags from the top and bottom 56 pt (Control Center, home) are ignored |
 | Fullscreen: turning the phone or the button, landscape only in the player | ✅ | iPad: only the button (the app can't turn it); held sideways the page sits beside the player. TV layout: always fullscreen |
 | Speed, quality ladder (HLS variants), screen size (fit/stretch/zoom) | ✅ | |
-| Soft subtitles (Miruro ssub VTT, SRT), size, box, delay, default language | ✅ | ASS styling and OpenSubtitles: later |
+| Soft subtitles (Miruro ssub VTT, SRT), local subtitle import, size, box, delay, default language | ✅ | ASS styling and OpenSubtitles: later |
 | Server picker: Sub/Dub and language filters, one line per server (how it carries subtitles, languages, can download, why it failed), failover, stall watchdog | ✅ | `ServerSummary` follows Android's `SourceLanguages`; the watch page's server pill opens the same sheet |
 | Skip intro/outro (button + auto with countdown), +85 s skip without timings, timings from the media index's AniSkip mirror, then AniSkip | ✅ | Android's credits rule for outros |
 | Up Next card with countdown, autoplay at the end | ✅ | |
@@ -110,7 +110,7 @@ Legend: ✅ done · 🟡 partial · ⏳ planned (phase) · ➖ not applicable on
 | Logins sealed under a passphrase (PBKDF2-HMAC-SHA256 + AES-GCM) | ✅ | AniList token both ways; a MAL hand-off code from Android signs in on restore |
 | Device-only custom lists from an Android backup | ⏳ | Reported, not kept; account lists sync once signed in |
 | MyAnimeList XML export | ✅ | Account list, or the device's saves and history |
-| Downloads: HLS (segments + key, served from 127.0.0.1) and MP4, two at a time, failover, resume | ✅ | Works in the Simulator; foreground only |
+| Downloads: HLS/MP4, soft-sub sidecars, single-MP4 conversion, two at a time, failover, resume | ✅ | HLS remains as a fallback when system export cannot convert it; foreground only |
 | Per-episode download button, "download these episodes", Downloads tab per show, offline playback | ✅ | The server picker's arrows save from that server (iOS addition; Android's are only a marker), the rest tried behind it if it fails |
 | Download quality, space used, remove all | ✅ | Android's `download_quality` |
 | Background downloads, save as MP4 for other apps | ⏳ | Later |

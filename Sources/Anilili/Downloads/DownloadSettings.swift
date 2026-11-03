@@ -29,7 +29,7 @@ struct DownloadSettings: View {
             .confirmationDialog("Remove every download?", isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button("Remove all", role: .destructive) { store.removeAll() }
             }
-        SettingsNotice(text: "Episodes save two at a time while Anilili is open, into the app's own library; one that's interrupted carries on next time. Subbed episodes are always saved with hard subs, burned into the picture, so only hard-sub servers are used.")
+        SettingsNotice(text: "Episodes save two at a time while Anilili is open, into the app's own library; one that's interrupted carries on next time. HLS downloads are converted to one MP4 when possible, and soft subtitles are saved beside the video.")
     }
 }
 #endif

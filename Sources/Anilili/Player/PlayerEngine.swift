@@ -328,6 +328,32 @@ final class PlayerEngine {
         }
     }
 
+    /// Copies a user-selected subtitle into the app container so it remains readable after the
+    /// document picker permission expires, then makes it available in the current player.
+    func importSubtitle(from url: URL) {
+        guard let current else { return }
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("ImportedSubtitles", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let ext = url.pathExtension.isEmpty ? "srt" : url.pathExtension.lowercased()
+            let target = directory.appendingPathComponent("\(request?.id ?? UUID().uuidString).\(ext)")
+            try? FileManager.default.removeItem(at: target)
+            try FileManager.default.copyItem(at: url, to: target)
+            let name = url.deletingPathExtension().lastPathComponent
+            let language = name.localizedCaseInsensitiveContains("arab") || name.contains("عرب") ? "ar" : "en"
+            let track = SubtitleTrack(url: target, label: name.isEmpty ? "From device" : name, language: language)
+            subtitleTracks = current.subtitles.filter { !$0.url.isFileURL } + [track]
+            selectSubtitle(track)
+            Log.info("subtitles", "imported local file \(target.lastPathComponent)")
+        } catch {
+            lastEvent = "Subtitle import failed: \(error.localizedDescription)"
+            Log.error("subtitles", "import failed: \(Log.describe(error))")
+        }
+    }
+
     func nudgeSubtitles(by seconds: Double) {
         subtitleDelay = ((subtitleDelay + seconds) * 10).rounded() / 10
         Log.info("subtitles", "delay \(subtitleDelay)s")

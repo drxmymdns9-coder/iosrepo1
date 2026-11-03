@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import AnililiCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Speed, quality, screen size, subtitles and audio (Android's `PlayerSettingsSheet`).
 struct PlayerSettingsSheet: View {
@@ -374,6 +375,7 @@ struct SubtitlesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     let engine: PlayerEngine
+    @State private var importing = false
 
     var body: some View {
         NavigationStack {
@@ -381,6 +383,15 @@ struct SubtitlesSheet: View {
                 row("Off", selected: engine.selectedSubtitle == nil) { engine.selectSubtitle(nil) }
                 ForEach(engine.subtitleTracks) { track in
                     row(track.label, selected: engine.selectedSubtitle == track) { engine.selectSubtitle(track) }
+                }
+                Section {
+                    Button {
+                        importing = true
+                    } label: {
+                        Label("Add subtitle file from device", systemImage: "doc.badge.plus")
+                    }
+                } footer: {
+                    Text("Supported formats: SRT, VTT, ASS and SSA")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -391,6 +402,11 @@ struct SubtitlesSheet: View {
         }
         .tint(palette.primary)
         .presentationDetents([.medium, .large])
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.text, .data], allowsMultipleSelection: false) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                engine.importSubtitle(from: url)
+            }
+        }
     }
 
     private func row(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
