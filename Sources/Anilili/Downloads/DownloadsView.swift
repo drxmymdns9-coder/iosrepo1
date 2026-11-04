@@ -18,16 +18,17 @@ struct DownloadsView: View {
     struct SeriesRoute: Hashable { var mediaID: Int }
 
     var body: some View {
+        let arabic = MenuLanguage.usesArabic
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PageTitle(title: "Downloads")
+                PageTitle(title: arabic ? "التنزيلات" : "Downloads")
                 HStack(spacing: 10) {
-                    Label("Open Magnet or Torrent", systemImage: "arrow.down.circle")
+                    Label(arabic ? "فتح Magnet أو Torrent" : "Open Magnet or Torrent", systemImage: "arrow.down.circle")
                         .font(AppFont.labelLarge)
                         .foregroundStyle(palette.onSurface)
                     Spacer()
-                    Button("Magnet") { showingMagnet = true }
-                    Button(".torrent") { importingTorrent = true }
+                    Button(arabic ? "مغناطيس" : "Magnet") { showingMagnet = true }
+                    Button(arabic ? ".torrent" : ".torrent") { importingTorrent = true }
                 }
                 .padding(.horizontal, Metrics.pagePadding)
                 .padding(.vertical, 10)
@@ -109,7 +110,7 @@ struct DownloadsView: View {
             }
             Spacer()
             if let url = job.videoURL {
-                Button { torrentPlaying = torrentRequest(name: job.name, url: url) } label: {
+                Button { torrentPlaying = torrentRequest(job: job, url: url) } label: {
                     Image(systemName: "play.fill").foregroundStyle(palette.primary)
                 }
             }
@@ -131,9 +132,14 @@ struct DownloadsView: View {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
-    private func torrentRequest(name: String, url: URL) -> PlayRequest {
-        let media = Media(id: -abs(name.hashValue), title: .init(userPreferred: name))
-        let source = VideoSource(url: url, provider: "Torrent", server: "This device", kind: .mp4)
+    private func torrentRequest(job: TorrentStore.Job, url: URL) -> PlayRequest {
+        let media = Media(id: -abs(job.name.hashValue), title: .init(userPreferred: job.name))
+        let tracks = job.subtitleURLs.map { file in
+            let name = file.deletingPathExtension().lastPathComponent
+            let language = name.localizedCaseInsensitiveContains("arab") || name.contains("عرب") || name.localizedCaseInsensitiveContains(".ar") ? "ar" : "en"
+            return SubtitleTrack(url: file, label: name, language: language)
+        }
+        let source = VideoSource(url: url, provider: "Torrent", server: "This device", kind: .mp4, subtitles: tracks, softSub: !tracks.isEmpty)
         return PlayRequest(media: media, episode: 1, audio: .sub, listing: .empty, localSource: source)
     }
 

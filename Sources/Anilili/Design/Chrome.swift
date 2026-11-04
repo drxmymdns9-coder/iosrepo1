@@ -17,6 +17,16 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 
     /// Settings → App → Menu language relabels these, as on Android.
     var label: String {
+        if MenuLanguage.usesArabic {
+            switch self {
+            case .home: return "الرئيسية"
+            case .search: return "بحث"
+            case .downloads: return "التنزيلات"
+            case .library: return "قائمتي"
+            case .settings: return "الإعدادات"
+            case .schedule: return "الجدول"
+            }
+        }
         let spanish = MenuLanguage.usesSpanish
         switch self {
         case .home: return spanish ? "Inicio" : "Home"

@@ -9,6 +9,21 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
 
     var title: String {
+        if MenuLanguage.usesArabic {
+            switch self {
+            case .player: return "المشغل"
+            case .subtitles: return "الترجمات"
+            case .downloads: return "التنزيلات"
+            case .servers: return "الخوادم"
+            case .accounts: return "الحسابات والمزامنة"
+            case .notifications: return "الإشعارات"
+            case .content: return "المحتوى"
+            case .appearance: return "المظهر"
+            case .data: return "البيانات"
+            case .app: return "التطبيق"
+            case .about: return "حول التطبيق"
+            }
+        }
         switch self {
         case .player: return "Player"
         case .subtitles: return "Subtitles"
@@ -41,11 +56,12 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// Android's `MenuLanguage`: Spanish relabels the main navigation and Settings' own heading.
+/// Menu language: relabels the navigation and settings headings, with Arabic also enabling RTL.
 enum MenuLanguage: String, CaseIterable, Identifiable {
     case system
     case english = "en"
     case spanish = "es"
+    case arabic = "ar"
 
     static let key = "menu_language"
 
@@ -60,15 +76,33 @@ enum MenuLanguage: String, CaseIterable, Identifiable {
         case .spanish: return true
         case .english: return false
         case .system: return Locale.current.language.languageCode?.identifier == "es"
+        case .arabic: return false
+        }
+    }
+
+    static var usesArabic: Bool {
+        switch current {
+        case .arabic: return true
+        case .system: return Locale.current.language.languageCode?.identifier == "ar"
+        default: return false
         }
     }
 
     /// Named in whichever language is on screen.
     func label(spanish: Bool) -> String {
+        if MenuLanguage.usesArabic {
+            switch self {
+            case .system: return "النظام"
+            case .english: return "الإنجليزية"
+            case .spanish: return "الإسبانية"
+            case .arabic: return "العربية"
+            }
+        }
         switch self {
         case .system: return spanish ? "Sistema" : "System"
         case .english: return spanish ? "Inglés" : "English"
         case .spanish: return "Español"
+        case .arabic: return "العربية"
         }
     }
 }
@@ -543,14 +577,15 @@ private struct AppSettings: View {
 
     var body: some View {
         let spanish = MenuLanguage.usesSpanish
+        let arabic = MenuLanguage.usesArabic
         ChoiceRow(
-            title: "Menu language",
-            detail: spanish ? "Cambia las etiquetas de navegación" : "Changes the main navigation labels",
+            title: arabic ? "لغة القائمة" : "Menu language",
+            detail: arabic ? "تغيير لغة أسماء وأقسام التطبيق" : spanish ? "Cambia las etiquetas de navegación" : "Changes the main navigation labels",
             options: MenuLanguage.allCases.map(\.rawValue),
             label: { (MenuLanguage(rawValue: $0) ?? .system).label(spanish: spanish) },
             selection: $menuLanguage,
-            kicker: spanish ? "Aplicación" : "App",
-            explanation: spanish ? "Cambia las etiquetas de navegación principales." : "Changes the main navigation labels."
+            kicker: arabic ? "التطبيق" : spanish ? "Aplicación" : "App",
+            explanation: arabic ? "تغيير لغة أسماء التبويبات وأقسام الإعدادات." : spanish ? "Cambia las etiquetas de navegación principales." : "Changes the main navigation labels."
         )
         // Android's Layout row. Only an iPad has a choice: a phone always gets the phone layout.
         if TelevisionLayout.isPad {

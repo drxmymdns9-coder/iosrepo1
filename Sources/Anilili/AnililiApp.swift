@@ -63,6 +63,7 @@ struct AnililiApp: App {
             RootView()
                 .environment(library)
                 .environment(router)
+                .environment(\.layoutDirection, MenuLanguage.usesArabic ? .rightToLeft : .leftToRight)
                 .preferredColorScheme(.dark)
                 .task { await DubIndexStore.shared.load() }
         }

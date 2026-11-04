@@ -138,7 +138,8 @@ enum UsageReporter {
         let size = UIScreen.main.nativeBounds.size
         let screen = "\(Int(min(size.width, size.height)))x\(Int(max(size.width, size.height)))"
         return UsagePing.Device(os: UIDevice.current.systemVersion, maker: "Apple", model: model, screen: screen,
-                                lang: Locale.preferredLanguages.first, appLang: MenuLanguage.usesSpanish ? "es" : "en")
+                                lang: Locale.preferredLanguages.first,
+                                appLang: MenuLanguage.usesArabic ? "ar" : MenuLanguage.usesSpanish ? "es" : "en")
     }
 
     /// The main settings, under the keys and stored values the app shares with Android.
