@@ -17,6 +17,11 @@ final class TorrentStore {
         var source: String
         var state: State
         var videoURL: URL?
+        var progress: Double = 0
+        var downloadRate: Double = 0
+        var peers: Int = 0
+        var downloaded: Int64 = 0
+        var total: Int64 = 0
 
         enum State: Hashable {
             case waiting
@@ -76,7 +81,22 @@ final class TorrentStore {
                 let handle = try await session.addTorrent(params)
                 try await handle.start()
                 let info = try await handle.waitForMetadata(timeout: 120)
+                let monitor = Task { [weak self] in
+                    while !Task.isCancelled {
+                        let status = await handle.status()
+                        self?.update(id) { job in
+                            job.progress = status.progress
+                            job.downloadRate = status.downloadRate
+                            job.peers = status.numPeers
+                            job.downloaded = status.totalDownloaded
+                            job.total = status.totalSize
+                        }
+                        if status.progress >= 1 { break }
+                        try? await Task.sleep(for: .seconds(1))
+                    }
+                }
                 try await handle.waitForCompletion(timeout: 24 * 60 * 60)
+                monitor.cancel()
                 let video = info.files
                     .filter { Self.videoExtensions.contains(($0.path as NSString).pathExtension.lowercased()) }
                     .max { $0.length < $1.length }

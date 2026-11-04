@@ -100,6 +100,12 @@ struct DownloadsView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(job.name).font(AppFont.labelLarge).foregroundStyle(palette.onSurface).lineLimit(2)
                 Text(torrentStatus(job.state)).font(AppFont.bodySmall).foregroundStyle(palette.onSurfaceVariant)
+                if case .downloading = job.state {
+                    ProgressView(value: job.progress).tint(palette.primary)
+                    Text("\(Int(job.progress * 100))% · \(formatBytes(job.downloadRate))/s · \(job.peers) peers")
+                        .font(AppFont.labelSmall)
+                        .foregroundStyle(palette.onSurfaceVariant)
+                }
             }
             Spacer()
             if let url = job.videoURL {
@@ -119,6 +125,10 @@ struct DownloadsView: View {
         case .finished: return "Ready to play"
         case .failed(let message): return "Failed: \(message)"
         }
+    }
+
+    private func formatBytes(_ bytes: Double) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
     private func torrentRequest(name: String, url: URL) -> PlayRequest {
