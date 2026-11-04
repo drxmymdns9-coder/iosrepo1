@@ -134,12 +134,7 @@ struct DownloadsView: View {
 
     private func torrentRequest(job: TorrentStore.Job, url: URL) -> PlayRequest {
         let media = Media(id: -abs(job.name.hashValue), title: .init(userPreferred: job.name))
-        let tracks = job.subtitleURLs.map { file in
-            let name = file.deletingPathExtension().lastPathComponent
-            let language = name.localizedCaseInsensitiveContains("arab") || name.contains("عرب") || name.localizedCaseInsensitiveContains(".ar") ? "ar" : "en"
-            return SubtitleTrack(url: file, label: name, language: language)
-        }
-        let source = VideoSource(url: url, provider: "Torrent", server: "This device", kind: .mp4, subtitles: tracks, softSub: !tracks.isEmpty)
+        let source = VideoSource(url: url, provider: "Torrent", server: "This device", kind: .mp4)
         return PlayRequest(media: media, episode: 1, audio: .sub, listing: .empty, localSource: source)
     }
 

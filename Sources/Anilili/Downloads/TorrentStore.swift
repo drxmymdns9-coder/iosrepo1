@@ -17,7 +17,6 @@ final class TorrentStore {
         var source: String
         var state: State
         var videoURL: URL?
-        var subtitleURLs: [URL] = []
         var progress: Double = 0
         var downloadRate: Double = 0
         var peers: Int = 0
@@ -104,18 +103,10 @@ final class TorrentStore {
                 guard let video else { throw NSError(domain: "AnililiTorrent", code: 2, userInfo: [NSLocalizedDescriptionKey: "The torrent has no supported video file."]) }
                 let url = self.root.appendingPathComponent(video.path)
                 guard FileManager.default.fileExists(atPath: url.path) else { throw NSError(domain: "AnililiTorrent", code: 3, userInfo: [NSLocalizedDescriptionKey: "The downloaded video file was not found."]) }
-                let videoStem = url.deletingPathExtension().lastPathComponent.lowercased()
-                let subtitles = ((try? FileManager.default.contentsOfDirectory(at: url.deletingLastPathComponent(), includingPropertiesForKeys: nil)) ?? [])
-                    .filter { Self.subtitleExtensions.contains($0.pathExtension.lowercased()) }
-                    .filter { candidate in
-                        let stem = candidate.deletingPathExtension().lastPathComponent.lowercased()
-                        return stem == videoStem || stem.contains(videoStem) || videoStem.contains(stem)
-                    }
                 self.update(id) { job in
                     job.state = .finished
                     job.name = info.name
                     job.videoURL = url
-                    job.subtitleURLs = subtitles
                 }
             } catch {
                 self.update(id) { $0.state = .failed(error.localizedDescription) }
@@ -137,6 +128,5 @@ final class TorrentStore {
     }
 
     private static let videoExtensions: Set<String> = ["mp4", "m4v", "mov", "ts", "mkv", "webm", "avi"]
-    private static let subtitleExtensions: Set<String> = ["srt", "vtt", "ass", "ssa"]
 }
 #endif
