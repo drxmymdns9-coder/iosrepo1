@@ -12,6 +12,8 @@ struct PlayRequest: Identifiable, Hashable {
     var episode: Int
     var audio: AudioTrack
     var listing: EpisodeListing
+    /// A user-supplied local file, bypassing the online source resolver.
+    var localSource: VideoSource? = nil
     /// Where to start, when a link says (`anilili://watch/…?t=`); otherwise the saved position.
     var start: Double? = nil
 
@@ -23,7 +25,7 @@ struct PlayRequest: Identifiable, Hashable {
     var info: EpisodeInfo? { listing.episode(episode) }
 
     static func == (lhs: PlayRequest, rhs: PlayRequest) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    func hash(into hasher: inout Hasher) { hasher.combine(id); hasher.combine(localSource) }
 }
 
 /// The player's brain: resolves sources and fails over between them, keeps time, subtitles,

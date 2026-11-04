@@ -7,8 +7,13 @@ import SwiftUI
 struct DownloadsView: View {
     @Environment(\.palette) private var palette
     @State private var query = ""
+    @State private var importingTorrent = false
+    @State private var showingMagnet = false
+    @State private var magnet = ""
+    @State private var torrentPlaying: PlayRequest?
 
     private var store: DownloadStore { .shared }
+    private var torrentStore: TorrentStore { .shared }
 
     struct SeriesRoute: Hashable { var mediaID: Int }
 
@@ -16,6 +21,17 @@ struct DownloadsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 PageTitle(title: "Downloads")
+                HStack(spacing: 10) {
+                    Label("Open Magnet or Torrent", systemImage: "arrow.down.circle")
+                        .font(AppFont.labelLarge)
+                        .foregroundStyle(palette.onSurface)
+                    Spacer()
+                    Button("Magnet") { showingMagnet = true }
+                    Button(".torrent") { importingTorrent = true }
+                }
+                .padding(.horizontal, Metrics.pagePadding)
+                .padding(.vertical, 10)
+                ForEach(torrentStore.jobs) { job in torrentRow(job) }
                 let series = store.series.filter { query.isEmpty || $0.media.title.all.joined(separator: " ").localizedCaseInsensitiveContains(query) }
                 if store.records.isEmpty {
                     Text("Nothing downloaded yet. Save an episode from its show page (the arrow beside it) to keep it here.")
@@ -51,6 +67,64 @@ struct DownloadsView: View {
         .background(palette.background)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: SeriesRoute.self) { DownloadSeriesView(mediaID: $0.mediaID) }
+        .fileImporter(isPresented: $importingTorrent, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
+            if case .success(let urls) = result, let url = urls.first { torrentStore.addTorrentFile(url) }
+        }
+        .sheet(isPresented: $showingMagnet) {
+            NavigationStack {
+                Form {
+                    Section("Magnet link") {
+                        TextField("magnet:?xt=urn:btih:…", text: $magnet, axis: .vertical)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    Button("Start download") {
+                        torrentStore.addMagnet(magnet)
+                        magnet = ""
+                        showingMagnet = false
+                    }
+                    .disabled(!magnet.lowercased().hasPrefix("magnet:"))
+                }
+                .navigationTitle("Open Magnet")
+                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Cancel") { showingMagnet = false } } }
+            }
+            .presentationDetents([.medium])
+        }
+        .fullScreenCover(item: $torrentPlaying) { WatchView(request: $0) }
+    }
+
+    private func torrentRow(_ job: TorrentStore.Job) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: job.videoURL == nil ? "arrow.down.circle" : "play.circle.fill")
+                .foregroundStyle(palette.primary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(job.name).font(AppFont.labelLarge).foregroundStyle(palette.onSurface).lineLimit(2)
+                Text(torrentStatus(job.state)).font(AppFont.bodySmall).foregroundStyle(palette.onSurfaceVariant)
+            }
+            Spacer()
+            if let url = job.videoURL {
+                Button { torrentPlaying = torrentRequest(name: job.name, url: url) } label: {
+                    Image(systemName: "play.fill").foregroundStyle(palette.primary)
+                }
+            }
+        }
+        .padding(.horizontal, Metrics.pagePadding)
+        .padding(.vertical, 8)
+    }
+
+    private func torrentStatus(_ state: TorrentStore.Job.State) -> String {
+        switch state {
+        case .waiting: return "Waiting…"
+        case .downloading: return "Downloading…"
+        case .finished: return "Ready to play"
+        case .failed(let message): return "Failed: \(message)"
+        }
+    }
+
+    private func torrentRequest(name: String, url: URL) -> PlayRequest {
+        let media = Media(id: -abs(name.hashValue), title: .init(userPreferred: name))
+        let source = VideoSource(url: url, provider: "Torrent", server: "This device", kind: .mp4)
+        return PlayRequest(media: media, episode: 1, audio: .sub, listing: .empty, localSource: source)
     }
 
     private func seriesRow(_ series: DownloadQueue.Series) -> some View {

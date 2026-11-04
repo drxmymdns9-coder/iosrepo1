@@ -33,7 +33,10 @@ let package = Package(
             targets: ["Anilili"]
         ),
     ],
-    dependencies: cryptoPackage,
+    dependencies: cryptoPackage + [
+        // Pure Swift BitTorrent engine for user-supplied magnet links and .torrent files.
+        .package(url: "https://github.com/warppipe/swift-torrent.git", branch: "main"),
+    ],
     targets: [
         // Catalogue, providers and parsing. Foundation and swift-crypto only, so its tests run on Linux under WSL
         // where there is no SwiftUI.
@@ -57,7 +60,7 @@ let package = Package(
         // is built and tested here, keeps Swift 6.
         .target(
             name: "Anilili",
-            dependencies: ["AnililiCore"],
+            dependencies: ["AnililiCore", .product(name: "SwiftTorrent", package: "swift-torrent")],
             resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

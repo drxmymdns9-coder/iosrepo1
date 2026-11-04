@@ -503,9 +503,9 @@ struct WatchView: View {
         engine.setSpeed(Float(PlayerLimits.speed(defaultSpeed, default: 1)))
         let startAt = current.start ?? library.history.resumePosition(mediaID: current.media.id, episode: current.episode)
         request.start = nil
-        var offline: VideoSource?
+        var offline: VideoSource? = current.localSource
         var otherAudio: VideoSource?
-        if let saved = DownloadStore.shared.saved(mediaID: current.media.id, episode: current.episode, prefer: current.audio) {
+        if offline == nil, let saved = DownloadStore.shared.saved(mediaID: current.media.id, episode: current.episode, prefer: current.audio) {
             // The other audio's saved copy only stands in when no server answers (offline): online
             // the viewer gets the audio they picked.
             if saved.audio == current.audio {
