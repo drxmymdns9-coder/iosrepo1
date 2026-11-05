@@ -44,7 +44,7 @@ enum VideoEngineChoice: String, CaseIterable, Identifiable {
     }
 
     static var current: VideoEngineChoice {
-        VideoEngineChoice(rawValue: UserDefaults.standard.string(forKey: Setting.videoEngine) ?? "") ?? .automatic
+        VideoEngineChoice(rawValue: UserDefaults.standard.string(forKey: Setting.videoEngine) ?? "") ?? .ask
     }
 }
 #endif

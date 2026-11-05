@@ -351,7 +351,7 @@ struct SettingsPageView: View {
 
 /// Settings → Player, in Android's order.
 private struct PlayerSettings: View {
-    @AppStorage(Setting.videoEngine) private var videoEngine = VideoEngineChoice.automatic.rawValue
+    @AppStorage(Setting.videoEngine) private var videoEngine = VideoEngineChoice.ask.rawValue
     @AppStorage(Setting.playOnOpen) private var playOnOpen = true
     @AppStorage(Setting.openInExternalPlayer) private var openExternally = false
     @AppStorage(Setting.externalPlayer) private var externalPlayer = ""

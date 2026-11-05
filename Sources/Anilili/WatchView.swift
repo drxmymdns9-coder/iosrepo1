@@ -34,7 +34,7 @@ struct WatchView: View {
     @AppStorage(PlaybackBufferSize.key) private var bufferSize = PlaybackBufferSize.automatic.rawValue
     @AppStorage(PlayerLimits.defaultSpeedKey) private var defaultSpeed = 1.0
     @AppStorage(Setting.openInExternalPlayer) private var openExternally = false
-    @AppStorage(Setting.videoEngine) private var videoEngine = VideoEngineChoice.automatic.rawValue
+    @AppStorage(Setting.videoEngine) private var videoEngine = VideoEngineChoice.ask.rawValue
     @AppStorage(Setting.playerStatusBar) private var statusBarWithControls = true
     @State private var request: PlayRequest
     @State private var engine = PlayerEngine()
@@ -168,10 +168,24 @@ struct WatchView: View {
             ZStack(alignment: .top) {
                 Color.black
                 VideoView(vlcPlayer)
-                Text("VLC")
-                    .font(AppFont.labelSmall)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(8)
+                HStack(spacing: 8) {
+                    Button {
+                        vlcPlayer.stop()
+                        usingVLC = false
+                        back(full: full)
+                    } label: {
+                        Image(systemName: leavesFullscreen(full) ? "chevron.down" : "chevron.left")
+                            .foregroundStyle(.white)
+                            .frame(width: 42, height: 42)
+                            .background(.black.opacity(0.55), in: Circle())
+                    }
+                    Text("VLC")
+                        .font(AppFont.labelSmall)
+                        .foregroundStyle(.white.opacity(0.8))
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, full ? 10 : 4)
             }
         } else if let embed = engine.embed {
             embedPlayer(embed, full: full)
@@ -520,6 +534,8 @@ struct WatchView: View {
         }
         let engineForEpisode = chosenVideoEngine ?? configuredEngine
         chosenVideoEngine = nil
+        vlcPlayer.stop()
+        usingVLC = false
         Log.info("player", "video engine preference: \(engineForEpisode.rawValue)")
         // Continue Watching opens the player straight from Home, before any episode list exists.
         if request.listing.isEmpty {
@@ -560,7 +576,7 @@ struct WatchView: View {
         if shouldUseVLC, let local = offline, local.url.isFileURL {
             do {
                 usingVLC = true
-                try playVLC(url: local.url, importedSubtitle: importedSubtitleURL())
+                try playVLC(url: local.url, headers: local.headers, importedSubtitle: importedSubtitleURL())
                 return
             } catch {
                 usingVLC = false
@@ -587,7 +603,7 @@ struct WatchView: View {
         )
         if engineForEpisode == .vlc, engine.embed == nil, let resolved = engine.current {
             do {
-                try playVLC(url: resolved.url)
+                try playVLC(url: resolved.url, headers: resolved.headers)
                 usingVLC = true
                 engine.player.pause()
             } catch {
@@ -609,8 +625,10 @@ struct WatchView: View {
         }
     }
 
-    private func playVLC(url: URL, importedSubtitle: URL? = nil) throws {
-        let media = try SwiftVLC.Media(url: url)
+    private func playVLC(url: URL, headers: [String: String] = [:], importedSubtitle: URL? = nil) throws {
+        let userAgent = headers.first { $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame }?.value
+        let referrer = headers.first { $0.key.caseInsensitiveCompare("Referer") == .orderedSame || $0.key.caseInsensitiveCompare("Referrer") == .orderedSame }?.value
+        let media = try SwiftVLC.Media(url: url, httpUserAgent: userAgent, httpReferrer: referrer)
         if let importedSubtitle {
             try media.addSlave(from: importedSubtitle, type: .subtitle)
         }
