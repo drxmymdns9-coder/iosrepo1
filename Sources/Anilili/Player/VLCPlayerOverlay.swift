@@ -8,6 +8,7 @@ struct VLCPlayerOverlay: View {
     let fullscreen: Bool
     let onBack: () -> Void
     @State private var controlsVisible = true
+    @State private var hideTask: Task<Void, Never>?
 
     private var arabic: Bool { MenuLanguage.usesArabic }
     private var isPlaying: Bool { player.state == .playing || player.state == .buffering }
@@ -16,7 +17,7 @@ struct VLCPlayerOverlay: View {
         ZStack {
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { controlsVisible.toggle() } }
+                .onTapGesture { toggleControls() }
             if controlsVisible {
                 LinearGradient(
                     colors: [.black.opacity(0.72), .clear, .black.opacity(0.82)],
@@ -34,7 +35,18 @@ struct VLCPlayerOverlay: View {
             }
         }
         .onChange(of: player.state) { _, state in
-            if state == .error { controlsVisible = true }
+            if state == .error || state == .paused || state == .stopped {
+                showControls(autoHide: false)
+            } else if state == .playing || state == .buffering {
+                showControls(autoHide: true)
+            }
+        }
+        .onAppear {
+            showControls(autoHide: true)
+        }
+        .onDisappear {
+            hideTask?.cancel()
+            hideTask = nil
         }
     }
 
@@ -115,11 +127,35 @@ struct VLCPlayerOverlay: View {
 
     private func togglePlay() {
         if isPlaying { player.pause() } else { try? player.play() }
+        showControls(autoHide: true)
     }
 
     private func seek(_ seconds: Double) {
         let offset = Duration.seconds(seconds)
         try? player.seek(by: offset)
+        showControls(autoHide: true)
+    }
+
+    private func showControls(autoHide: Bool) {
+        hideTask?.cancel()
+        controlsVisible = true
+        guard autoHide else { return }
+        hideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled, player.state == .playing || player.state == .buffering else { return }
+            controlsVisible = false
+        }
+    }
+
+    private func toggleControls() {
+        if controlsVisible {
+            hideTask?.cancel()
+            hideTask = nil
+            withAnimation(.easeOut(duration: 0.2)) { controlsVisible = false }
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) { controlsVisible = true }
+            if isPlaying { showControls(autoHide: true) }
+        }
     }
 }
 #endif
