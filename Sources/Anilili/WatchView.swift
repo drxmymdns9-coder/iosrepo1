@@ -165,27 +165,14 @@ struct WatchView: View {
     @ViewBuilder
     private func player(full: Bool) -> some View {
         if usingVLC {
-            ZStack(alignment: .top) {
+            ZStack {
                 Color.black
                 VideoView(vlcPlayer)
-                HStack(spacing: 8) {
-                    Button {
-                        vlcPlayer.stop()
-                        usingVLC = false
-                        back(full: full)
-                    } label: {
-                        Image(systemName: leavesFullscreen(full) ? "chevron.down" : "chevron.left")
-                            .foregroundStyle(.white)
-                            .frame(width: 42, height: 42)
-                            .background(.black.opacity(0.55), in: Circle())
-                    }
-                    Text("VLC")
-                        .font(AppFont.labelSmall)
-                        .foregroundStyle(.white.opacity(0.8))
-                    Spacer()
+                VLCPlayerOverlay(player: vlcPlayer, fullscreen: full) {
+                    vlcPlayer.stop()
+                    usingVLC = false
+                    back(full: full)
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, full ? 10 : 4)
             }
         } else if let embed = engine.embed {
             embedPlayer(embed, full: full)
