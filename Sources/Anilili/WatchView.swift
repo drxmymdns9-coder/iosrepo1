@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import AnililiCore
 import SwiftUI
+import SwiftVLC
 
 /// The watch page, after the Android app's phone layout: the player on top and, under it, the
 /// episode, the show, the server and audio pickers and the episode list. Turning the phone (or
@@ -33,9 +34,12 @@ struct WatchView: View {
     @AppStorage(PlaybackBufferSize.key) private var bufferSize = PlaybackBufferSize.automatic.rawValue
     @AppStorage(PlayerLimits.defaultSpeedKey) private var defaultSpeed = 1.0
     @AppStorage(Setting.openInExternalPlayer) private var openExternally = false
+    @AppStorage(Setting.videoEngine) private var videoEngine = VideoEngineChoice.automatic.rawValue
     @AppStorage(Setting.playerStatusBar) private var statusBarWithControls = true
     @State private var request: PlayRequest
     @State private var engine = PlayerEngine()
+    @State private var vlcPlayer = SwiftVLC.Player()
+    @State private var usingVLC = false
     @State private var pictureInPicture = PictureInPictureHandle()
     @State private var fullscreen = false
     @State private var landscape = false
@@ -47,6 +51,8 @@ struct WatchView: View {
     @State private var controlsShown = true
     /// The stream to hand over when Open episodes in external player is on and no app is named.
     @State private var askExternal: URL?
+    @State private var choosingVideoEngine = false
+    @State private var chosenVideoEngine: VideoEngineChoice?
 
     init(request: PlayRequest) {
         _request = State(initialValue: request)
@@ -105,6 +111,7 @@ struct WatchView: View {
         }
         .onDisappear {
             engine.stop()
+            vlcPlayer.stop()
             engine.removeRemoteCommands()
             OrientationLock.allow(.portrait, turnTo: isPad ? nil : .portrait)
         }
@@ -121,6 +128,17 @@ struct WatchView: View {
             }
         } message: {
             Text("Settings → Player sends episodes to another app.")
+        }
+        .confirmationDialog(
+            MenuLanguage.usesArabic ? "اختر مشغل الفيديو" : "Choose video player",
+            isPresented: $choosingVideoEngine,
+            titleVisibility: .visible
+        ) {
+            Button("AVPlayer") { chooseVideoEngine(.avPlayer) }
+            Button("VLC") { chooseVideoEngine(.vlc) }
+            Button(MenuLanguage.usesArabic ? "إلغاء" : "Cancel", role: .cancel) { chosenVideoEngine = .avPlayer }
+        } message: {
+            Text(MenuLanguage.usesArabic ? "اختر المشغل لهذه الحلقة فقط." : "Choose the player for this episode only.")
         }
         .sheet(item: $sheet) { which in
             switch which {
@@ -146,7 +164,16 @@ struct WatchView: View {
 
     @ViewBuilder
     private func player(full: Bool) -> some View {
-        if let embed = engine.embed {
+        if usingVLC {
+            ZStack(alignment: .top) {
+                Color.black
+                VideoView(vlcPlayer)
+                Text("VLC")
+                    .font(AppFont.labelSmall)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(8)
+            }
+        } else if let embed = engine.embed {
             embedPlayer(embed, full: full)
         } else {
             nativePlayer(full: full)
@@ -271,6 +298,12 @@ struct WatchView: View {
     private func change(to episode: Int) {
         Log.info("player", "episode \(request.episode) → \(episode)")
         request.episode = episode
+    }
+
+    private func chooseVideoEngine(_ choice: VideoEngineChoice) {
+        chosenVideoEngine = choice
+        choosingVideoEngine = false
+        Task { await start() }
     }
 
     // MARK: - Details (portrait)
@@ -480,6 +513,14 @@ struct WatchView: View {
     // MARK: - Opening an episode
 
     private func start() async {
+        let configuredEngine = VideoEngineChoice(rawValue: videoEngine) ?? .automatic
+        if configuredEngine == .ask && chosenVideoEngine == nil {
+            choosingVideoEngine = true
+            return
+        }
+        let engineForEpisode = chosenVideoEngine ?? configuredEngine
+        chosenVideoEngine = nil
+        Log.info("player", "video engine preference: \(engineForEpisode.rawValue)")
         // Continue Watching opens the player straight from Home, before any episode list exists.
         if request.listing.isEmpty {
             do {
@@ -514,6 +555,19 @@ struct WatchView: View {
                 otherAudio = await DownloadStore.shared.offlineSource(for: saved)
             }
         }
+        let isMKV = offline?.url.pathExtension.lowercased() == "mkv"
+        let shouldUseVLC = engineForEpisode == .vlc || (engineForEpisode == .automatic && isMKV)
+        if shouldUseVLC, let local = offline, local.url.isFileURL {
+            do {
+                usingVLC = true
+                try playVLC(url: local.url, importedSubtitle: importedSubtitleURL())
+                return
+            } catch {
+                usingVLC = false
+                Log.warning("vlc", "couldn't open local file; falling back to AVPlayer: \(error)")
+            }
+        }
+        usingVLC = false
         await engine.open(
             current,
             startAt: startAt,
@@ -531,6 +585,16 @@ struct WatchView: View {
             offline: offline,
             lastResort: otherAudio
         )
+        if engineForEpisode == .vlc, engine.embed == nil, let resolved = engine.current {
+            do {
+                try playVLC(url: resolved.url)
+                usingVLC = true
+                engine.player.pause()
+            } catch {
+                Log.warning("vlc", "couldn't open resolved source; keeping AVPlayer: \(error)")
+                usingVLC = false
+            }
+        }
         if !playOnOpen { engine.player.pause() }
         // Settings → Player → Open episodes in external player: the stream goes to the chosen app
         // (or the viewer picks one), and this player waits paused behind it. A saved download
@@ -543,6 +607,21 @@ struct WatchView: View {
                 askExternal = stream
             }
         }
+    }
+
+    private func playVLC(url: URL, importedSubtitle: URL? = nil) throws {
+        let media = try SwiftVLC.Media(url: url)
+        if let importedSubtitle {
+            try media.addSlave(from: importedSubtitle, type: .subtitle)
+        }
+        try vlcPlayer.play(media)
+    }
+
+    private func importedSubtitleURL() -> URL? {
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ImportedSubtitles", isDirectory: true)
+        return (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil))?
+            .first { $0.lastPathComponent.hasPrefix(request.id + ".") }
     }
 }
 #endif

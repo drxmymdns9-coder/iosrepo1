@@ -36,6 +36,8 @@ let package = Package(
     dependencies: cryptoPackage + [
         // Pure Swift BitTorrent engine for user-supplied magnet links and .torrent files.
         .package(url: "https://github.com/warppipe/swift-torrent.git", branch: "main"),
+        // libVLC for MKV containers, embedded subtitle tracks and ASS/SSA rendering.
+        .package(url: "https://github.com/harflabs/SwiftVLC.git", exact: "1.1.0-beta.14"),
     ],
     targets: [
         // Catalogue, providers and parsing. Foundation and swift-crypto only, so its tests run on Linux under WSL
@@ -60,7 +62,11 @@ let package = Package(
         // is built and tested here, keeps Swift 6.
         .target(
             name: "Anilili",
-            dependencies: ["AnililiCore", .product(name: "SwiftTorrent", package: "swift-torrent")],
+            dependencies: [
+                "AnililiCore",
+                .product(name: "SwiftTorrent", package: "swift-torrent"),
+                .product(name: "SwiftVLC", package: "SwiftVLC"),
+            ],
             resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

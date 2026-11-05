@@ -16,7 +16,7 @@ enum BackupService {
             "hold_playback_speed", "hold_to_speed_enabled", "player_clock", "player_content_scale", "player_gestures",
             "player_seek_gesture", "preferred_subtitle_language", "related_layout", "schedule_calendar_view",
             "subtitles_by_default", "subtitles_with_dub", "watch_order_story", DownloadStore.qualityKey, AppIconSync.key, AnnouncementCenter.key,
-            Setting.openInExternalPlayer, Setting.externalPlayer, Setting.pauseDetailsOverlay, Setting.playerStatusBar,
+            Setting.openInExternalPlayer, Setting.externalPlayer, Setting.videoEngine, Setting.pauseDetailsOverlay, Setting.playerStatusBar,
             Setting.hiddenMALTags, PlayerLimits.skipButtonKey, PlayerLimits.watchedThresholdKey, DefaultQuality.key,
             PlaybackBufferSize.key, TrackLanguage.audioKey, TrackLanguage.secondaryAudioKey, TrackLanguage.secondarySubtitleKey,
             ContinueVisibility.key, MenuLanguage.key, UpdateCenter.checkOnLaunchKey,
