@@ -603,7 +603,16 @@ struct WatchView: View {
         )
         if engineForEpisode == .vlc, engine.embed == nil, let resolved = engine.current {
             do {
-                try playVLC(url: resolved.url, headers: resolved.headers)
+                // The normal AVPlayer path uses StreamProxy to carry Referer/Origin,
+                // rewrite nested HLS URLs and serve gated AES keys. VLC must use the
+                // same proxy URL; the provider URL alone is not playable for these hosts.
+                let vlcURL: URL
+                if resolved.kind == .hls {
+                    vlcURL = StreamProxy.shared.address(for: resolved.url, headers: resolved.headers, key: resolved.aesKey) ?? resolved.url
+                } else {
+                    vlcURL = resolved.url
+                }
+                try playVLC(url: vlcURL, headers: resolved.headers)
                 usingVLC = true
                 engine.player.pause()
             } catch {
