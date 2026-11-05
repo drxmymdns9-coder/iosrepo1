@@ -84,7 +84,7 @@ struct VLCPlayerOverlay: View {
             HStack(spacing: 8) {
                 Menu {
                     ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
-                        Button("\(rate)x") { try? player.setPlaybackRate(Float(rate)) }
+                        Button("\(rate)x") { try? player.setPlaybackRate(PlaybackRate(Float(rate))) }
                     }
                 } label: {
                     Label(arabic ? "السرعة" : "Speed", systemImage: "speedometer")
