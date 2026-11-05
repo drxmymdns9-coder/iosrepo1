@@ -37,7 +37,7 @@ let package = Package(
         // Pure Swift BitTorrent engine for user-supplied magnet links and .torrent files.
         .package(url: "https://github.com/warppipe/swift-torrent.git", branch: "main"),
         // libVLC for MKV containers, embedded subtitle tracks and ASS/SSA rendering.
-        .package(url: "https://github.com/harflabs/SwiftVLC.git", exact: "1.1.0-beta.14"),
+        .package(url: "https://github.com/drxmymdns9-coder/SwiftVLC.git", branch: "codemagic-cdn"),
     ],
     targets: [
         // Catalogue, providers and parsing. Foundation and swift-crypto only, so its tests run on Linux under WSL
