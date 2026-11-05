@@ -599,7 +599,7 @@ struct WatchView: View {
                 } else {
                     vlcURL = resolved.url
                 }
-                try playVLC(url: vlcURL, headers: resolved.headers)
+                try playVLC(url: vlcURL, headers: resolved.headers, importedSubtitle: importedSubtitleURL())
                 usingVLC = true
                 engine.player.pause()
             } catch {
