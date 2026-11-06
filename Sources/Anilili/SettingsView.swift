@@ -351,7 +351,6 @@ struct SettingsPageView: View {
 
 /// Settings → Player, in Android's order.
 private struct PlayerSettings: View {
-    @AppStorage(Setting.videoEngine) private var videoEngine = VideoEngineChoice.ask.rawValue
     @AppStorage(Setting.playOnOpen) private var playOnOpen = true
     @AppStorage(Setting.openInExternalPlayer) private var openExternally = false
     @AppStorage(Setting.externalPlayer) private var externalPlayer = ""
@@ -445,16 +444,6 @@ private struct PlayerSettings: View {
             kicker: "Player",
             explanation: "How far ahead of the picture the player downloads. A larger buffer rides out an unsteady connection (a distant router, a slow server, a busy evening), so one interruption does not become a stutter. It costs memory, and iOS may stop short of it on a device that is low on it. Automatic leaves it to iOS. Takes effect from the next episode.",
             optionDetail: { PlaybackBufferSize.stored($0).detail }
-        )
-        ChoiceRow(
-            title: MenuLanguage.usesArabic ? "مشغل الفيديو" : "Video engine",
-            detail: MenuLanguage.usesArabic ? "اختر AVPlayer أو VLC أو اسألني قبل كل حلقة" : "Choose AVPlayer, VLC, or ask before each episode",
-            options: VideoEngineChoice.allCases.map(\.rawValue),
-            label: { VideoEngineChoice(rawValue: $0)?.label ?? VideoEngineChoice.automatic.label },
-            selection: $videoEngine,
-            kicker: MenuLanguage.usesArabic ? "المشغل" : "Player",
-            explanation: MenuLanguage.usesArabic ? "في وضع السؤال ستختار المشغل قبل بدء كل حلقة." : "Ask every time lets you choose the player before each episode.",
-            optionDetail: { VideoEngineChoice(rawValue: $0)?.detail }
         )
         ChoiceRow(
             title: "Playback speed",

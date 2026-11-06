@@ -145,7 +145,6 @@ enum Setting {
     static let syncSaved = "sync_saved_to_anilist"            // true: watchlist ↔ Plan to watch
     static let openInExternalPlayer = "open_episodes_in_external_player" // false
     static let externalPlayer = "external_player_package"     // "": ask every time (see ExternalPlayer)
-    static let videoEngine = "video_engine_v2"                // automatic, avplayer, vlc, ask; defaults to ask
     static let pauseDetailsOverlay = "pause_details_overlay"  // true
     static let playerContentScale = "player_content_scale"    // "fit" (Android's fit/crop/fill)
     static let playerClock = "player_clock"                   // true

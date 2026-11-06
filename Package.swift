@@ -37,8 +37,6 @@ let package = Package(
         // Pure Swift BitTorrent engine for user-supplied magnet links and .torrent files.
         // Pin the tested revision so the torrent API cannot change under Codemagic.
         .package(url: "https://github.com/warppipe/swift-torrent.git", revision: "79ab342c50621d69bce0d6f61228fcaf70c4ae48"),
-        // libVLC for MKV containers, embedded subtitle tracks and ASS/SSA rendering.
-        .package(url: "https://github.com/drxmymdns9-coder/SwiftVLC.git", revision: "8a75cc674bee8879ac2815fef9c473d368616b75"),
     ],
     targets: [
         // Catalogue, providers and parsing. Foundation and swift-crypto only, so its tests run on Linux under WSL
@@ -66,7 +64,6 @@ let package = Package(
             dependencies: [
                 "AnililiCore",
                 .product(name: "SwiftTorrent", package: "swift-torrent"),
-                .product(name: "SwiftVLC", package: "SwiftVLC"),
             ],
             resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v5)]

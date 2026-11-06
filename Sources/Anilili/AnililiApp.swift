@@ -172,6 +172,10 @@ struct RootView: View {
         .background(palette.background.ignoresSafeArea())
         .environment(\.palette, palette)
         .tint(palette.primary)
+        // MenuLanguage is intentionally not a system localization bundle. Re-keying the shell
+        // guarantees every conditional Arabic/English/Spanish label and RTL direction is rebuilt
+        // immediately after the App settings picker changes.
+        .id(menuLanguage)
         .onAppear {
             AppDelegate.openShow = { id in router.push(Media(id: id, title: .init())) }
             AccountStore.shared.libraryStore = library

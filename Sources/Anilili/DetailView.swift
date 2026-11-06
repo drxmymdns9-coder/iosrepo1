@@ -37,6 +37,7 @@ struct DetailView: View {
     /// The TV layout's page: its tab (Episodes first, as on Android TV) and episode block.
     @State var televisionTab: Tab = .episodes
     @State var televisionBlock: Int?
+    @State private var startingWatch = false
     @AppStorage("episode_order") var episodeOrder = "oldest"
     private var television = TelevisionLayout()
 
@@ -232,7 +233,13 @@ struct DetailView: View {
     private var actions: some View {
         let saved = library.watchlist.contains(media.id)
         let available = listing?.available(audio).map(\.number) ?? []
-        let canWatch = !available.isEmpty
+        let loadingEpisodes: Bool = {
+            if case .loading = listings[selectedSeason] { return true }
+            return false
+        }()
+        // The first visit often has no cached episode list yet. Keep the button tappable so the
+        // tap starts the fetch instead of looking like a dead control until the app is restarted.
+        let canWatch = true
         let status = AccountStore.shared.statuses[media.id]
         return HStack(spacing: 10) {
             Button {
@@ -271,10 +278,10 @@ struct DetailView: View {
                 .accessibilityLabel(score.map { "Your score: \(ListScore.format($0)) out of 10" } ?? "Rate this season")
             }
             Button {
-                play(resumeTarget(available), available: available)
+                startWatching(available: available)
             } label: {
                 HStack(spacing: 6) {
-                    if case .loading = listings[selectedSeason] ?? .loading {
+                    if loadingEpisodes || startingWatch {
                         ProgressView().controlSize(.small).tint(palette.onPrimary)
                     } else {
                         Image(systemName: "play.fill")
@@ -308,6 +315,28 @@ struct DetailView: View {
     func play(_ episode: Int, available: [Int]) {
         guard let listing, available.contains(episode) else { return }
         playing = PlayRequest(media: seasonMedia, episode: episode, audio: audio, listing: listing)
+    }
+
+    private func startWatching(available: [Int]) {
+        if !available.isEmpty {
+            play(resumeTarget(available), available: available)
+            return
+        }
+        guard !startingWatch else { return }
+        startingWatch = true
+        Task {
+            // If the screen's automatic first load is already running, wait for it instead of
+            // launching a second request that could race and overwrite a successful result.
+            while case .loading = listings[selectedSeason] {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            if listing == nil {
+                await loadEpisodes(selectedSeason, force: true)
+            }
+            let loaded = listing?.available(audio).map(\.number) ?? []
+            if !loaded.isEmpty { play(resumeTarget(loaded), available: loaded) }
+            startingWatch = false
+        }
     }
 
     @ViewBuilder
