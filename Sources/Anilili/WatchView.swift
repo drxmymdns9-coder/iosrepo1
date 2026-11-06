@@ -171,11 +171,11 @@ struct WatchView: View {
             ZStack {
                 Color.black
                 VideoView(vlcPlayer)
-                VLCPlayerOverlay(player: vlcPlayer, fullscreen: full, onRetry: retryVLC) {
+                VLCPlayerOverlay(player: vlcPlayer, fullscreen: full, onBack: {
                     vlcPlayer.stop()
                     usingVLC = false
                     back(full: full)
-                }
+                }, onRetry: retryVLC)
             }
         } else if let embed = engine.embed {
             embedPlayer(embed, full: full)

@@ -21,7 +21,11 @@ struct VLCPlayerOverlay: View {
     private var isPlaying: Bool { player.state == .playing }
     private var isBuffering: Bool { player.state == .buffering || player.state == .opening }
     private var hasFailed: Bool { player.state == .error }
-    private var durationSeconds: Double { player.duration?.seconds ?? 0 }
+    private var durationSeconds: Double {
+        guard let duration = player.duration else { return 0 }
+        let components = duration.components
+        return Double(components.seconds) + Double(components.attoseconds) / 1_000_000_000_000_000_000
+    }
     private var positionSeconds: Double { player.position }
 
     var body: some View {
@@ -66,7 +70,7 @@ struct VLCPlayerOverlay: View {
             case .buffering, .opening:
                 // Keep the status visible briefly, then allow the video to remain unobstructed.
                 scheduleHide()
-            case .error, .paused, .stopped, .idle:
+            case .error, .paused, .stopped, .stopping, .idle:
                 showControls(autoHide: false)
             }
         }
