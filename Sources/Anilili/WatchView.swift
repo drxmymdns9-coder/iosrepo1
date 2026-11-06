@@ -115,19 +115,19 @@ struct WatchView: View {
             engine.removeRemoteCommands()
             OrientationLock.allow(.portrait, turnTo: isPad ? nil : .portrait)
         }
-        .confirmationDialog("Open this episode in", isPresented: Binding(get: { askExternal != nil }, set: { if !$0 { askExternal = nil } }), titleVisibility: .visible) {
+        .confirmationDialog(MenuLanguage.usesArabic ? "فتح الحلقة في" : "Open this episode in", isPresented: Binding(get: { askExternal != nil }, set: { if !$0 { askExternal = nil } }), titleVisibility: .visible) {
             ForEach(ExternalPlayer.allCases) { app in
                 Button(app.name) {
                     if let stream = askExternal { app.open(stream) }
                     askExternal = nil
                 }
             }
-            Button("Play here instead") {
+            Button(MenuLanguage.usesArabic ? "التشغيل هنا بدلًا من ذلك" : "Play here instead") {
                 askExternal = nil
                 engine.player.play()
             }
         } message: {
-            Text("Settings → Player sends episodes to another app.")
+            Text(MenuLanguage.usesArabic ? "الإعدادات ← المشغل ترسل الحلقات إلى تطبيق آخر." : "Settings → Player sends episodes to another app.")
         }
         .confirmationDialog(
             MenuLanguage.usesArabic ? "اختر مشغل الفيديو" : "Choose video player",
@@ -152,7 +152,7 @@ struct WatchView: View {
                 NavigationStack {
                     ScrollView { episodeList.padding(.vertical, 8) }
                         .background(palette.background)
-                        .navigationTitle("Episodes")
+                        .navigationTitle(MenuLanguage.usesArabic ? "الحلقات" : "Episodes")
                         .navigationBarTitleDisplayMode(.inline)
                 }
                 .presentationDetents([.medium, .large])
@@ -339,7 +339,7 @@ struct WatchView: View {
         if request.media.format != "MOVIE" {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("Episodes").font(AppFont.titleMedium.weight(.bold)).foregroundStyle(palette.onSurface)
+                    Text(MenuLanguage.usesArabic ? "الحلقات" : "Episodes").font(AppFont.titleMedium.weight(.bold)).foregroundStyle(palette.onSurface)
                     Text("  \(request.listing.available(request.audio).count)").font(AppFont.bodyMedium).foregroundStyle(palette.onSurfaceVariant)
                 }
                 .padding(.horizontal, Metrics.pagePadding)

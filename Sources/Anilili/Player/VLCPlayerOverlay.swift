@@ -24,6 +24,7 @@ struct VLCPlayerOverlay: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
+                .allowsHitTesting(false)
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
