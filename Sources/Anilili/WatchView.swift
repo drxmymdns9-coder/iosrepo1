@@ -40,6 +40,9 @@ struct WatchView: View {
     @State private var engine = PlayerEngine()
     @State private var vlcPlayer = SwiftVLC.Player()
     @State private var usingVLC = false
+    @State private var vlcSourceURL: URL?
+    @State private var vlcSourceHeaders: [String: String] = [:]
+    @State private var vlcImportedSubtitle: URL?
     @State private var pictureInPicture = PictureInPictureHandle()
     @State private var fullscreen = false
     @State private var landscape = false
@@ -168,7 +171,7 @@ struct WatchView: View {
             ZStack {
                 Color.black
                 VideoView(vlcPlayer)
-                VLCPlayerOverlay(player: vlcPlayer, fullscreen: full) {
+                VLCPlayerOverlay(player: vlcPlayer, fullscreen: full, onRetry: retryVLC) {
                     vlcPlayer.stop()
                     usingVLC = false
                     back(full: full)
@@ -622,6 +625,9 @@ struct WatchView: View {
     }
 
     private func playVLC(url: URL, headers: [String: String] = [:], importedSubtitle: URL? = nil) throws {
+        vlcSourceURL = url
+        vlcSourceHeaders = headers
+        vlcImportedSubtitle = importedSubtitle
         let userAgent = headers.first { $0.key.caseInsensitiveCompare("User-Agent") == .orderedSame }?.value
         let referrer = headers.first { $0.key.caseInsensitiveCompare("Referer") == .orderedSame || $0.key.caseInsensitiveCompare("Referrer") == .orderedSame }?.value
         let media = try SwiftVLC.Media(url: url, httpUserAgent: userAgent, httpReferrer: referrer)
@@ -629,6 +635,20 @@ struct WatchView: View {
             try media.addSlave(from: importedSubtitle, type: .subtitle)
         }
         try vlcPlayer.play(media)
+    }
+
+    /// Rebuilds the VLC media object instead of only calling play(). This matters after a CDN
+    /// connection has died: libVLC can remain in a terminal buffering state until its media is
+    /// replaced, so a genuine retry must recreate the input.
+    private func retryVLC() {
+        guard let url = vlcSourceURL else { return }
+        do {
+            vlcPlayer.stop()
+            try playVLC(url: url, headers: vlcSourceHeaders, importedSubtitle: vlcImportedSubtitle)
+            usingVLC = true
+        } catch {
+            Log.warning("vlc", "retry failed: \(error.localizedDescription)")
+        }
     }
 
     private func importedSubtitleURL() -> URL? {
