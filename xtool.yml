@@ -3,6 +3,9 @@ bundleID: com.anilili.ios
 product: Anilili
 iconPath: Resources/AppIcon.png
 infoPath: Resources/Info.plist
+extensions:
+  - product: AnililiWidget
+    infoPath: Resources/AnililiWidget-Info.plist
 # Alternate app icons (scripts/generate_icon_variants.py): iOS reads them from the bundle root.
 resources:
   - Resources/AppIcons/AppIcon-blood_red@2x.png

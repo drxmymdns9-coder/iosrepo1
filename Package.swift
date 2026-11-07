@@ -33,6 +33,10 @@ let package = Package(
             name: "Anilili",
             targets: ["Anilili"]
         ),
+        .library(
+            name: "AnililiWidget",
+            targets: ["AnililiWidget"]
+        ),
     ],
     dependencies: cryptoPackage + [
         // Pure Swift BitTorrent engine for user-supplied magnet links and .torrent files.
@@ -67,6 +71,11 @@ let package = Package(
                 .product(name: "SwiftTorrent", package: "swift-torrent"),
             ],
             resources: [.process("Resources")],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .target(
+            name: "AnililiWidget",
+            dependencies: ["AnililiCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
