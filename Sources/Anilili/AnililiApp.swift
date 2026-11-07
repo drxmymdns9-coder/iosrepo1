@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         MainActor.assumeIsolated { HanimeResolver.install() }
         registerDownloadProcessing()
-        scheduleDownloadProcessing()
+        Self.scheduleDownloadProcessing()
         return true
     }
 
