@@ -22,6 +22,7 @@ let cryptoProduct: [Target.Dependency] = []
 
 let package = Package(
     name: "Anilili",
+    defaultLocalization: "ar",
     platforms: [
         .iOS(.v18),
         .macOS(.v14),
