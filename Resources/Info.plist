@@ -11,14 +11,7 @@
 		<key>UIBackgroundModes</key>
 		<array>
 			<string>audio</string>
-			<string>processing</string>
 		</array>
-		<key>BGTaskSchedulerPermittedIdentifiers</key>
-		<array>
-			<string>com.anilili.ios.downloads</string>
-		</array>
-		<key>NSSupportsLiveActivities</key>
-		<true/>
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
 	<key>UISupportedInterfaceOrientations</key>
