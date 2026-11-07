@@ -3,6 +3,7 @@ import AVFoundation
 import AnililiCore
 import Foundation
 import Observation
+import UIKit
 
 /// Where downloads live: Application Support/Downloads, one folder per episode, kept out of
 /// iCloud backups (they can be fetched again).
@@ -197,6 +198,18 @@ final class DownloadStore {
 
     private func run(_ record: DownloadRecord) async {
         let id = record.id
+        if #available(iOS 16.1, *) {
+            DownloadActivityManager.shared.start(id: id, mediaID: record.media.id,
+                                                  title: record.episodeTitle ?? record.media.title.preferred,
+                                                  episode: record.episode)
+        }
+        // This gives iOS a finite background execution window when the user locks the phone or
+        // switches apps. It is intentionally paired with persisted queue state: if iOS expires
+        // the window, the next launch resumes the queued/partial episode safely.
+        let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Download \(id)") {}
+        defer {
+            if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask) }
+        }
         let folder = DownloadPaths.root.appendingPathComponent(record.folder, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         do {
@@ -226,6 +239,9 @@ final class DownloadStore {
                     }
                     save()
                     Log.info("downloads", "\(id): saved \(DownloadQueue.size(result.bytes)) from \(source.label)")
+                    if #available(iOS 16.1, *) {
+                        DownloadActivityManager.shared.finish(id: id, episode: record.episode, source: source.label)
+                    }
                     return
                 } catch {
                     if Task.isCancelled { return }
@@ -239,6 +255,9 @@ final class DownloadStore {
             Log.error("downloads", "\(id) failed: \(Log.describe(error))")
             update(id) { $0.state = .failed(error.localizedDescription) }
             save()
+            if #available(iOS 16.1, *) {
+                DownloadActivityManager.shared.finish(id: id, episode: record.episode, source: record.source ?? "", failed: true)
+            }
         }
     }
 
@@ -481,6 +500,11 @@ final class DownloadStore {
         guard case .downloading? = records.first(where: { $0.id == id })?.state else { return }
         lastProgress[id] = fraction
         update(id) { $0.state = .downloading(fraction) }
+        if #available(iOS 16.1, *) {
+            let record = records.first(where: { $0.id == id })
+            DownloadActivityManager.shared.update(id: id, episode: record?.episode ?? 0, progress: fraction,
+                                                  status: .downloading, source: record?.source ?? "")
+        }
     }
 
     private func update(_ id: String, _ change: (inout DownloadRecord) -> Void) {

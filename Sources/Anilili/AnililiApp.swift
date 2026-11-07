@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import AVFoundation
 import AnililiCore
+import BackgroundTasks
 import Observation
 import SwiftUI
 import UIKit
@@ -14,7 +15,29 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         MainActor.assumeIsolated { HanimeResolver.install() }
+        registerDownloadProcessing()
+        scheduleDownloadProcessing()
         return true
+    }
+
+    private func registerDownloadProcessing() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.anilili.ios.downloads", using: nil) { task in
+            task.expirationHandler = { task.setTaskCompleted(success: false) }
+            Task { @MainActor in
+                // DownloadStore restores queued/partial records during initialization and pumps
+                // them when the process is relaunched by iOS.
+                _ = DownloadStore.shared
+                task.setTaskCompleted(success: true)
+                Self.scheduleDownloadProcessing()
+            }
+        }
+    }
+
+    private static func scheduleDownloadProcessing() {
+        let request = BGProcessingTaskRequest(identifier: "com.anilili.ios.downloads")
+        request.requiresNetworkConnectivity = true
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        try? BGTaskScheduler.shared.submit(request)
     }
 
     /// A phone stays portrait outside the player, which widens this while it's open (see
