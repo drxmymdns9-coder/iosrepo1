@@ -78,6 +78,21 @@ struct DownloadTests {
         #expect(plan.playlist.components(separatedBy: "s00000.ts").count == 3)
     }
 
+    @Test func separateAudioPlansUseTheirOwnPrefix() {
+        let audio = """
+        #EXTM3U
+        #EXT-X-TARGETDURATION:4
+        #EXTINF:4,
+        audio-1.aac
+        #EXTINF:4,
+        audio-2.aac
+        """
+        let plan = HLSDownload.plan(audio, base: base, prefix: "a")
+        #expect(plan.files.map(\.local) == ["a00000.aac", "a00001.aac"])
+        #expect(plan.playlist.contains("a00000.aac"))
+        #expect(!plan.playlist.contains("s00000"))
+    }
+
     @Test func kwikCopiesKeepTheIVsTheirSegmentNamesGive() {
         // Saved as it came, the local names (s00000.ts…) would lose the numbers Kwik's IVs come
         // from, and the copy would only play from 0:00.

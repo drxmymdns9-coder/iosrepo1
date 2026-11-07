@@ -72,6 +72,12 @@ public enum HLSDownload {
 
     /// The media playlist with every URI made local, and the files to fetch for it.
     public static func plan(_ playlist: String, base: URL) -> Plan {
+        plan(playlist, base: base, prefix: "s")
+    }
+
+    /// As `plan`, but with a distinct file prefix. A master playlist can reference separate video
+    /// and audio media playlists; their segment names must not collide in the same download folder.
+    public static func plan(_ playlist: String, base: URL, prefix: String) -> Plan {
         // Kwik's IVs come from the numbers in its segment names, which the local names drop: a
         // copy saved without them decrypts every segment but the first wrongly, so playing it from
         // anywhere but 0:00 finds no tracks and "ends" at once (One Piece 208, 2026-10-12).
@@ -105,8 +111,8 @@ public enum HLSDownload {
                 let isKey = line.hasPrefix("#EXT-X-KEY:")
                 if isKey { encrypted = line.range(of: "METHOD=AES-128", options: .caseInsensitive) != nil }
                 if let match = uriAttribute.firstMatch(in: line), let uri = match[1],
-                   let name = isKey ? local(uri, prefix: "key", counter: &keys, fallbackExtension: "bin")
-                                    : local(uri, prefix: "init", counter: &maps, fallbackExtension: "mp4") {
+                   let name = isKey ? local(uri, prefix: prefix == "s" ? "key" : "\(prefix)key", counter: &keys, fallbackExtension: "bin")
+                                    : local(uri, prefix: prefix == "s" ? "init" : "\(prefix)init", counter: &maps, fallbackExtension: "mp4") {
                     lines.append(line.replacingOccurrences(of: "URI=\"\(uri)\"", with: "URI=\"\(name)\""))
                 } else {
                     lines.append(line)
@@ -116,7 +122,7 @@ public enum HLSDownload {
                 duration += Double(value.trimmingCharacters(in: .whitespaces)) ?? 0
                 lines.append(line)
             } else if !line.isEmpty, !line.hasPrefix("#") {
-                lines.append(local(line, prefix: "s", counter: &segments, fallbackExtension: "ts", isSegment: true) ?? line)
+                lines.append(local(line, prefix: prefix, counter: &segments, fallbackExtension: "ts", isSegment: true) ?? line)
             } else {
                 lines.append(line)
             }

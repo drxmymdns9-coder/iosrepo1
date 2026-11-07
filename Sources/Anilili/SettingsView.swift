@@ -68,7 +68,9 @@ enum MenuLanguage: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     static var current: MenuLanguage {
-        MenuLanguage(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .system
+        // Arabic is the app's complete first-party UI language; users can still switch from
+        // Settings when they want the original English or Spanish labels.
+        MenuLanguage(rawValue: UserDefaults.standard.string(forKey: key) ?? "ar") ?? .arabic
     }
 
     static var usesSpanish: Bool {

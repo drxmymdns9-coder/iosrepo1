@@ -252,26 +252,46 @@ final class DownloadStore {
             playlistURL = variant
             media = try await HTTP.text(variant, headers: headers)
         }
-        let plan = HLSDownload.plan(media, base: playlistURL)
-        guard !plan.files.isEmpty else { throw HTTPError("The playlist lists no segments.") }
+        let videoPlan = HLSDownload.plan(media, base: playlistURL)
+        guard !videoPlan.files.isEmpty else { throw HTTPError("The playlist lists no segments.") }
+
+        // Some providers put audio in a separate HLS rendition. Previously we saved only the
+        // selected video playlist, leaving AVPlayer with a dangling AUDIO group and producing a
+        // perfectly playable but silent offline file. Materialize the audio rendition beside the
+        // video playlist and save a small local master playlist that joins both tracks.
+        let audio = playlistURL == source.url ? externalAudio(in: top, base: source.url) : nil
+        var audioPlan: HLSDownload.Plan?
+        var indexPlaylist = videoPlan.playlist
+        if let audio {
+            let audioText = try await HTTP.text(audio.url, headers: headers)
+            let planned = HLSDownload.plan(audioText, base: audio.url, prefix: "a")
+            guard !planned.files.isEmpty else { throw HTTPError("The audio playlist lists no segments.") }
+            audioPlan = planned
+            let audioLine = audio.line.replacingOccurrences(of: "URI=\"\(audio.url.absoluteString)\"", with: "URI=\"audio.m3u8\"")
+                .replacingOccurrences(of: "URI=\"\(audio.rawURI)\"", with: "URI=\"audio.m3u8\"")
+            let streamInfo = selectedStreamInfo(in: top, variant: playlistURL, base: source.url) ?? "#EXT-X-STREAM-INF:BANDWIDTH=1"
+            indexPlaylist = "#EXTM3U\n\(audioLine)\n\(streamInfo)\nvideo.m3u8\n"
+        }
+        let plans = [videoPlan] + (audioPlan.map { [$0] } ?? [])
+        let plannedFiles = plans.flatMap(\.files)
         // Files left from an earlier attempt are kept only if they came from this server's same
         // playlist: another server's segments would be spliced into this one's under the same names.
         let stampURL = folder.appendingPathComponent(Self.stampFile)
-        let expected = stamp(source: source.label, files: plan.files.count)
+        let expected = stamp(source: source.label, files: plannedFiles.count)
         if (try? String(contentsOf: stampURL, encoding: .utf8)) != expected {
             let leftovers = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
             if !leftovers.isEmpty { Log.info("downloads", "\(id): starting afresh, \(leftovers.count) files were from another attempt") }
             for file in leftovers { try? FileManager.default.removeItem(at: file) }
             try Data(expected.utf8).write(to: stampURL, options: .atomic)
         }
-        Log.info("downloads", "\(id): \(plan.files.count) files, \(Int(plan.duration / 60)) min, from \(Log.short(playlistURL))")
+        Log.info("downloads", "\(id): \(plannedFiles.count) files, \(Int(videoPlan.duration / 60)) min, from \(Log.short(playlistURL))")
 
-        let total = plan.files.count
+        let total = plannedFiles.count
         var done = 0
         var bytes: Int64 = 0
         // Four files at a time.
         try await withThrowingTaskGroup(of: Int64.self) { group in
-            var pending = plan.files.makeIterator()
+            var pending = plannedFiles.makeIterator()
             for _ in 0..<4 {
                 guard let file = pending.next() else { break }
                 group.addTask { try await Self.fetch(file, into: folder, headers: headers) }
@@ -286,13 +306,49 @@ final class DownloadStore {
                 }
             }
         }
-        try Data(plan.playlist.utf8).write(to: folder.appendingPathComponent("index.m3u8"), options: .atomic)
+        if audioPlan != nil {
+            try Data(videoPlan.playlist.utf8).write(to: folder.appendingPathComponent("video.m3u8"), options: .atomic)
+            try Data(audioPlan!.playlist.utf8).write(to: folder.appendingPathComponent("audio.m3u8"), options: .atomic)
+        }
+        try Data(indexPlaylist.utf8).write(to: folder.appendingPathComponent("index.m3u8"), options: .atomic)
         let subtitleFile = try? await saveSubtitle(source, to: folder)
         if let converted = try? await convertHLS(folder: folder, id: id), converted {
-            return SaveResult(bytes: fileSize(folder.appendingPathComponent("episode.mp4")), duration: plan.duration > 0 ? plan.duration : nil, kind: .mp4, subtitleFile: subtitleFile)
+            return SaveResult(bytes: fileSize(folder.appendingPathComponent("episode.mp4")), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .mp4, subtitleFile: subtitleFile)
         }
-        return SaveResult(bytes: bytes + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: plan.duration > 0 ? plan.duration : nil, kind: .hls, subtitleFile: subtitleFile)
+        return SaveResult(bytes: bytes + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .hls, subtitleFile: subtitleFile)
     }
+
+    private struct ExternalAudio {
+        var url: URL
+        var rawURI: String
+        var line: String
+    }
+
+    private func externalAudio(in master: String, base: URL) -> ExternalAudio? {
+        for raw in master.split(whereSeparator: \.isNewline) {
+            let line = String(raw)
+            guard line.hasPrefix("#EXT-X-MEDIA:"), line.range(of: "TYPE=AUDIO", options: .caseInsensitive) != nil,
+                  let range = line.range(of: #"URI="([^"]+)""#, options: .regularExpression) else { continue }
+            let value = String(line[range]).replacingOccurrences(of: "URI=\"", with: "").dropLast()
+            guard let url = URL(string: String(value), relativeTo: base)?.absoluteURL else { continue }
+            return ExternalAudio(url: url, rawURI: String(value), line: line)
+        }
+        return nil
+    }
+
+    private func selectedStreamInfo(in master: String, variant: URL, base: URL) -> String? {
+        var pending: String?
+        for raw in master.split(whereSeparator: \.isNewline) {
+            let line = String(raw).trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#EXT-X-STREAM-INF:") { pending = line }
+            else if let info = pending, !line.isEmpty, !line.hasPrefix("#") {
+                if URL(string: line, relativeTo: base)?.absoluteURL == variant { return info }
+                pending = nil
+            }
+        }
+        return pending
+    }
+
 
     /// Which server and playlist a folder's files came from (`saveHLS`).
     private static let stampFile = "source.txt"
