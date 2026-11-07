@@ -76,13 +76,20 @@ final class DownloadStore {
     /// tries every server in the order the player would.
     func enqueue(_ media: Media, episode: Int, audio: AudioTrack, title: String? = nil, thumbnail: URL? = nil, from source: String? = nil) {
         if let existing = record(mediaID: media.id, episode: episode, audio: audio) {
-            switch existing.state {
-            case .failed, .paused:
-                if let source { update(existing.id) { $0.preferredSource = source } }
-                retry(existing.id)
-            default: break
+            // A completed copy may have come from a different server. Tapping that server's
+            // download button is an explicit choice, so replace the old copy instead of silently
+            // returning from the one-record-per-audio guard below.
+            if let source, existing.isDone, existing.source != source {
+                remove(existing.id)
+            } else {
+                switch existing.state {
+                case .failed, .paused:
+                    if let source { update(existing.id) { $0.preferredSource = source } }
+                    retry(existing.id)
+                default: break
+                }
+                return
             }
-            return
         }
         var record = DownloadRecord(media: media, episode: episode, audio: audio, episodeTitle: title, thumbnail: thumbnail)
         record.preferredSource = source

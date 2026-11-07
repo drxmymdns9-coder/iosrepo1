@@ -278,7 +278,9 @@ private struct ServerDownloadButton: View {
         // A saved copy belongs to the server it came from, which is another one when the pick failed.
         let owner = record.flatMap { $0.isDone ? $0.source : ($0.preferredSource ?? $0.source) }
         let mine = owner == source.label
-        let taken = record.map { $0.isDone || $0.state.isActive } ?? false
+        // A completed copy from another server can be replaced by tapping this server's button;
+        // only an active download is locked while it is in flight.
+        let taken = record.map { $0.state.isActive && !mine } ?? false
         Button {
             store.enqueue(request.media, episode: request.episode, audio: request.audio,
                           title: request.info?.title, thumbnail: request.info?.thumbnail, from: source.label)

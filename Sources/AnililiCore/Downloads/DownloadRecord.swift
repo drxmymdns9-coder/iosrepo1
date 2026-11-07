@@ -91,15 +91,28 @@ public enum DownloadQueue {
     /// The rest stay behind it, so a pick that has stopped answering still gets the episode saved.
     public static func attempts(_ sources: [VideoSource], preferring label: String?) -> [VideoSource] {
         let saveable = sources.filter(ServerSummary.canDownload)
-        // The episode-row download button has no server picker, so prefer a real soft-sub source
-        // and keep hard-sub sources as fallback. A source explicitly chosen in the server sheet
-        // still wins over this default ordering.
-        var ordered = saveable.filter { $0.softSub && !$0.subtitles.isEmpty }
-        ordered += saveable.filter { !($0.softSub && !$0.subtitles.isEmpty) }
-        guard let label, let index = ordered.firstIndex(where: { $0.label == label }) else { return ordered }
-        var rest = ordered
+        // The episode-row download button has no server picker. Prefer Arabic soft subtitles,
+        // then any soft subtitles, then a stream that can be saved without sidecar captions. HLS
+        // is preferred over a direct MP4 because it preserves adaptive quality selection.
+        let ranked = saveable.enumerated().sorted { left, right in
+            let l = downloadScore(left.element)
+            let r = downloadScore(right.element)
+            return l == r ? left.offset < right.offset : l > r
+        }.map(\.element)
+        guard let label, let index = ranked.firstIndex(where: { $0.label == label }) else { return ranked }
+        var rest = ranked
         let picked = rest.remove(at: index)
         return [picked] + rest
+    }
+
+    private static func downloadScore(_ source: VideoSource) -> Int {
+        let arabic = source.subtitles.contains {
+            $0.language.lowercased().hasPrefix("ar")
+                || $0.label.localizedCaseInsensitiveContains("arab")
+                || $0.label.contains("عرب")
+        }
+        let captions = source.softSub && !source.subtitles.isEmpty
+        return (arabic ? 100 : captions ? 70 : 0) + (source.kind == .hls ? 10 : 0)
     }
 
     public struct Series: Identifiable, Sendable {

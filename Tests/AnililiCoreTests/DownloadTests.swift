@@ -27,6 +27,16 @@ struct DownloadTests {
         #expect(DownloadQueue.batchLabel(count: 1, audio: .dub) == "Download 1 episode (Dub)")
     }
 
+    @Test func automaticDownloadsPreferArabicSoftSubtitles() {
+        let hard = VideoSource(url: URL(string: "https://hard.example/ep.m3u8")!, provider: "Hard", server: "1080p", kind: .hls)
+        let english = VideoSource(url: URL(string: "https://english.example/ep.m3u8")!, provider: "Soft", server: "English", kind: .hls,
+                                  subtitles: [SubtitleTrack(url: URL(string: "https://english.example/en.vtt")!, label: "English", language: "en")], softSub: true)
+        let arabic = VideoSource(url: URL(string: "https://arabic.example/ep.m3u8")!, provider: "Soft", server: "Arabic", kind: .hls,
+                                 subtitles: [SubtitleTrack(url: URL(string: "https://arabic.example/ar.vtt")!, label: "Arabic", language: "ar")], softSub: true)
+        #expect(DownloadQueue.attempts([hard, english, arabic], preferring: nil) == [arabic, english, hard])
+        #expect(DownloadQueue.attempts([hard, english, arabic], preferring: hard.label).first == hard)
+    }
+
     @Test func recordsSavedBeforeAPickedServerStillLoad() throws {
         var record = DownloadRecord(media: Media(id: 1, title: .init(romaji: "Old")), episode: 3, audio: .sub)
         record.preferredSource = "AniKoto · MegaPlay"
