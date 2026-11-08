@@ -20,7 +20,11 @@ final class BackgroundDownloadSession: NSObject, URLSessionDownloadDelegate, @un
         let configuration = URLSessionConfiguration.background(withIdentifier: Self.identifier)
         configuration.sessionSendsLaunchEvents = true
         configuration.isDiscretionary = false
-        configuration.waitsForConnectivity = true
+        configuration.waitsForConnectivity = false
+        configuration.allowsCellularAccess = true
+        configuration.allowsExpensiveNetworkAccess = true
+        configuration.allowsConstrainedNetworkAccess = true
+        configuration.httpMaximumConnectionsPerHost = 4
         configuration.timeoutIntervalForResource = 6 * 3600
         return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
     }()
@@ -97,12 +101,14 @@ final class BackgroundDownloadSession: NSObject, URLSessionDownloadDelegate, @un
             persistLocked()
             lock.unlock()
             callbacks.forEach { $0(.success(size)) }
+            wakeDownloadStore()
         } catch {
             pending.removeValue(forKey: downloadTask.taskIdentifier)
             let callbacks = waiters.removeValue(forKey: item.destination) ?? []
             persistLocked()
             lock.unlock()
             callbacks.forEach { $0(.failure(error)) }
+            wakeDownloadStore()
         }
     }
 
@@ -115,6 +121,15 @@ final class BackgroundDownloadSession: NSObject, URLSessionDownloadDelegate, @un
         persistLocked()
         lock.unlock()
         callbacks.forEach { $0(.failure(error)) }
+        wakeDownloadStore()
+    }
+
+    /// URLSession can relaunch the app only to deliver a transfer event. Recreate the queue so
+    /// it notices completed TS files and performs playlist writing/MP4 conversion.
+    private func wakeDownloadStore() {
+        Task { @MainActor in
+            _ = DownloadStore.shared
+        }
     }
 
     private func restore() {

@@ -265,12 +265,12 @@ final class DownloadStore {
 
     private func saveHLS(_ source: VideoSource, to folder: URL, id: String) async throws -> SaveResult {
         let headers = headers(source)
-        let top = try await HTTP.text(source.url, headers: headers)
+        let top = try await backgroundText(source.url, headers: headers, in: folder, name: ".background-master.m3u8")
         var playlistURL = source.url
         var media = top
         if let variant = HLSDownload.variant(in: top, base: source.url, maxHeight: maxHeight) {
             playlistURL = variant
-            media = try await HTTP.text(variant, headers: headers)
+            media = try await backgroundText(variant, headers: headers, in: folder, name: ".background-variant.m3u8")
         }
         let videoPlan = HLSDownload.plan(media, base: playlistURL)
         guard !videoPlan.files.isEmpty else { throw HTTPError("The playlist lists no segments.") }
@@ -283,7 +283,7 @@ final class DownloadStore {
         var audioPlan: HLSDownload.Plan?
         var indexPlaylist = videoPlan.playlist
         if let audio {
-            let audioText = try await HTTP.text(audio.url, headers: headers)
+            let audioText = try await backgroundText(audio.url, headers: headers, in: folder, name: ".background-audio.m3u8")
             let planned = HLSDownload.plan(audioText, base: audio.url, prefix: "a")
             guard !planned.files.isEmpty else { throw HTTPError("The audio playlist lists no segments.") }
             audioPlan = planned
@@ -336,6 +336,19 @@ final class DownloadStore {
             return SaveResult(bytes: fileSize(folder.appendingPathComponent("episode.mp4")), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .mp4, subtitleFile: subtitleFile)
         }
         return SaveResult(bytes: bytes + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .hls, subtitleFile: subtitleFile)
+    }
+
+    private func backgroundText(_ url: URL, headers: [String: String], in folder: URL, name: String) async throws -> String {
+        let destination = folder.appendingPathComponent(name)
+        try? FileManager.default.removeItem(at: destination)
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 6 * 3600
+        for (header, value) in headers { request.setValue(value, forHTTPHeaderField: header) }
+        _ = try await BackgroundDownloadSession.shared.download(request, to: destination)
+        guard let text = try? String(contentsOf: destination, encoding: .utf8), !text.isEmpty else {
+            throw HTTPError("The HLS playlist was empty.")
+        }
+        return text
     }
 
     private struct ExternalAudio {
@@ -432,11 +445,14 @@ final class DownloadStore {
         guard source.softSub, let track = source.subtitles.first(where: {
             $0.language.lowercased().hasPrefix("ar") || $0.label.localizedCaseInsensitiveContains("arab") || $0.label.contains("عرب")
         }) ?? source.subtitles.first(where: { $0.language.lowercased().hasPrefix("en") }) ?? source.subtitles.first else { return nil }
-        let data = try await HTTP.data(track.url, headers: headers(source)).0
-        guard !data.isEmpty else { return nil }
         let ext = track.url.pathExtension.lowercased()
         let name = "subtitle.\(ext == "vtt" || ext == "ass" || ext == "ssa" ? ext : "srt")"
-        try data.write(to: folder.appendingPathComponent(name), options: .atomic)
+        var request = URLRequest(url: track.url)
+        request.timeoutInterval = 6 * 3600
+        for (header, value) in headers(source) { request.setValue(value, forHTTPHeaderField: header) }
+        let destination = folder.appendingPathComponent(name)
+        _ = try await BackgroundDownloadSession.shared.download(request, to: destination)
+        guard fileSize(destination) > 0 else { return nil }
         return name
     }
 
