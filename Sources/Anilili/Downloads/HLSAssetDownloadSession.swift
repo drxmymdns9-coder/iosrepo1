@@ -56,7 +56,9 @@ final class HLSAssetDownloadSession: NSObject, AVAssetDownloadDelegate, @uncheck
                 return
             }
             var options: [String: Any] = [:]
-            if !headers.isEmpty { options[AVURLAssetHTTPHeaderFieldsKey] = headers }
+            // Xcode 26 no longer exposes AVURLAssetHTTPHeaderFieldsKey as a Swift symbol,
+            // while AVFoundation still accepts its documented string key.
+            if !headers.isEmpty { options["AVURLAssetHTTPHeaderFieldsKey"] = headers }
             let asset = AVURLAsset(url: assetURL, options: options)
             guard let task = session.makeAssetDownloadTask(asset: asset,
                                                            assetTitle: title,
