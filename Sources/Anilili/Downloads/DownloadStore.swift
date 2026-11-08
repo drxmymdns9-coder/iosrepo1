@@ -345,9 +345,6 @@ final class DownloadStore {
         }
         try Data(indexPlaylist.utf8).write(to: folder.appendingPathComponent("index.m3u8"), options: .atomic)
         let subtitleFile = try? await saveSubtitle(source, to: folder)
-        if let converted = try? await convertHLS(folder: folder, id: id), converted {
-            return SaveResult(bytes: fileSize(folder.appendingPathComponent("episode.mp4")), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .mp4, subtitleFile: subtitleFile)
-        }
         return SaveResult(bytes: bytes + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .hls, subtitleFile: subtitleFile)
     }
 
@@ -479,36 +476,6 @@ final class DownloadStore {
         _ = try await BackgroundDownloadSession.shared.download(request, to: destination)
         guard fileSize(destination) > 0 else { return nil }
         return name
-    }
-
-    /// Converts the completed local HLS playlist to one MP4. HLS remains the fallback if the
-    /// system exporter cannot handle a particular encrypted or fragmented playlist.
-    private func convertHLS(folder: URL, id: String) async throws -> Bool {
-        let playlist = try await LocalMediaServer.shared.url(for: "\(folder.lastPathComponent)/index.m3u8")
-        let asset = AVURLAsset(url: playlist)
-        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else { return false }
-        let output = folder.appendingPathComponent("episode.mp4")
-        try? FileManager.default.removeItem(at: output)
-        exporter.outputURL = output
-        exporter.outputFileType = .mp4
-        exporter.shouldOptimizeForNetworkUse = false
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            exporter.exportAsynchronously {
-                switch exporter.status {
-                case .completed: continuation.resume()
-                case .failed, .cancelled: continuation.resume(throwing: exporter.error ?? HTTPError("HLS to MP4 conversion failed"))
-                default: continuation.resume(throwing: HTTPError("HLS export did not complete"))
-                }
-            }
-        }
-        let size = fileSize(output)
-        guard size > 0 else { return false }
-        let keep = Set(["episode.mp4", "subtitle.srt", "subtitle.vtt", "subtitle.ass", "subtitle.ssa"])
-        for file in (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [] where !keep.contains(file.lastPathComponent) {
-            try? FileManager.default.removeItem(at: file)
-        }
-        Log.info("downloads", "\(id): converted HLS to one MP4 (\(DownloadQueue.size(size)))")
-        return true
     }
 
     private func fileSize(_ url: URL) -> Int64 {
