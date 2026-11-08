@@ -203,13 +203,6 @@ final class DownloadStore {
                                                   title: record.episodeTitle ?? record.media.title.preferred,
                                                   episode: record.episode)
         }
-        // This gives iOS a finite background execution window when the user locks the phone or
-        // switches apps. It is intentionally paired with persisted queue state: if iOS expires
-        // the window, the next launch resumes the queued/partial episode safely.
-        let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Download \(id)") {}
-        defer {
-            if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask) }
-        }
         let folder = DownloadPaths.root.appendingPathComponent(record.folder, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         do {
@@ -395,20 +388,25 @@ final class DownloadStore {
             return Int64(existing.count)
         }
         var attempt = 0
+        let temporary = folder.appendingPathComponent(".background-\(planned.local)")
         while true {
             do {
-                let (data, response) = try await HTTP.data(url, headers: headers)
-                guard (200..<300).contains(response.statusCode), !data.isEmpty else {
-                    throw HTTPError(status: response.statusCode, "HTTP \(response.statusCode) for \(url.lastPathComponent)")
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 6 * 3600
+                for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+                let rawSize = try await BackgroundDownloadSession.shared.download(request, to: temporary)
+                guard rawSize > 0, let data = try? Data(contentsOf: temporary) else {
+                    throw HTTPError("\(planned.local) downloaded no data")
                 }
                 let saved = planned.isSegment ? HLSDownload.unwrap(data) : data
                 if planned.isSegment, !HLSDownload.isMedia([UInt8](saved.prefix(HLSDownload.mediaCheckLength)), size: saved.count, encrypted: planned.encrypted) {
-                    let type = response.value(forHTTPHeaderField: "Content-Type") ?? "no type"
-                    throw HTTPError("\(planned.local) came back as \(saved.count) bytes of \(type), not video")
+                    throw HTTPError("\(planned.local) came back as \(saved.count) bytes, not video")
                 }
                 try saved.write(to: file, options: .atomic)
+                try? FileManager.default.removeItem(at: temporary)
                 return Int64(saved.count)
             } catch {
+                try? FileManager.default.removeItem(at: temporary)
                 attempt += 1
                 if attempt >= 3 || Task.isCancelled { throw error }
                 try await Task.sleep(for: .seconds(2 * attempt))
@@ -419,13 +417,8 @@ final class DownloadStore {
     private func saveMP4(_ source: VideoSource, to folder: URL, id: String) async throws -> SaveResult {
         var request = URLRequest(url: source.url)
         for (name, value) in headers(source) { request.setValue(value, forHTTPHeaderField: name) }
-        let reporter = DownloadProgress { [weak self] fraction in
-            Task { @MainActor in self?.progress(id, fraction) }
-        }
-        let (temporary, response) = try await Self.session.download(for: request, delegate: reporter)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw HTTPError(status: (response as? HTTPURLResponse)?.statusCode, "The server refused the file.")
-        }
+        let temporary = folder.appendingPathComponent(".background-episode.mp4")
+        _ = try await BackgroundDownloadSession.shared.download(request, to: temporary)
         let target = folder.appendingPathComponent("episode.mp4")
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: temporary, to: target)
@@ -483,14 +476,6 @@ final class DownloadStore {
         return size.int64Value
     }
 
-    /// Long transfers: a whole episode can take minutes.
-    private static let session: URLSession = {
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 60
-        configuration.timeoutIntervalForResource = 6 * 3600
-        configuration.httpCookieStorage = nil
-        return URLSession(configuration: configuration)
-    }()
 
     // MARK: - State
 
@@ -523,19 +508,4 @@ final class DownloadStore {
     }
 }
 
-/// Reports a download task's progress (the async `download(for:)` has no progress of its own).
-private final class DownloadProgress: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    private let report: (Double) -> Void
-    private var observation: NSKeyValueObservation?
-
-    init(_ report: @escaping (Double) -> Void) {
-        self.report = report
-    }
-
-    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
-        observation = task.progress.observe(\.fractionCompleted) { [report] progress, _ in
-            report(progress.fractionCompleted)
-        }
-    }
-}
 #endif

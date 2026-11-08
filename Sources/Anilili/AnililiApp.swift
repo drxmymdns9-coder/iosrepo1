@@ -14,7 +14,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         MainActor.assumeIsolated { HanimeResolver.install() }
+        _ = BackgroundDownloadSession.shared
         return true
+    }
+
+    func application(_ application: UIApplication,
+                     handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        BackgroundDownloadSession.shared.handleEvents(for: identifier, completionHandler: completionHandler)
     }
 
     /// A phone stays portrait outside the player, which widens this while it's open (see
