@@ -152,6 +152,8 @@ final class DownloadStore {
         switch kind {
         case .mp4:
             return VideoSource(url: DownloadPaths.root.appendingPathComponent(path), provider: "Downloaded", server: record.source ?? "This device", kind: .mp4, subtitles: subtitle, softSub: !subtitle.isEmpty)
+        case .hlsAsset:
+            return VideoSource(url: DownloadPaths.root.appendingPathComponent(path), provider: "Downloaded", server: record.source ?? "This device", kind: .mp4, subtitles: subtitle, softSub: !subtitle.isEmpty)
         case .hls:
             if !checked.contains(record.id) {
                 let folder = DownloadPaths.root.appendingPathComponent(record.folder, isDirectory: true)
@@ -216,7 +218,13 @@ final class DownloadStore {
                     Log.info("downloads", "\(id): saving from \(source.label)")
                     let result: SaveResult
                     switch source.kind {
-                    case .hls: result = try await saveHLS(source, to: folder, id: id)
+                    case .hls:
+                        do {
+                            result = try await saveHLSWithSystemBackground(source, to: folder, id: id)
+                        } catch {
+                            Log.warning("downloads", "\(id): native HLS background download failed, using TS fallback: \(Log.describe(error))")
+                            result = try await saveHLS(source, to: folder, id: id)
+                        }
                     case .mp4: result = try await saveMP4(source, to: folder, id: id)
                     case .embed: continue
                     }
@@ -336,6 +344,18 @@ final class DownloadStore {
             return SaveResult(bytes: fileSize(folder.appendingPathComponent("episode.mp4")), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .mp4, subtitleFile: subtitleFile)
         }
         return SaveResult(bytes: bytes + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .hls, subtitleFile: subtitleFile)
+    }
+
+    private func saveHLSWithSystemBackground(_ source: VideoSource, to folder: URL, id: String) async throws -> SaveResult {
+        let destination = folder.appendingPathComponent("episode.movpkg", isDirectory: true)
+        let package = try await HLSAssetDownloadSession.shared.download(
+            assetURL: source.url,
+            headers: headers(source),
+            title: "Anilili \(id)",
+            to: destination
+        )
+        let subtitleFile = try? await saveSubtitle(source, to: folder)
+        return SaveResult(bytes: directorySize(package), duration: nil, kind: .hlsAsset, subtitleFile: subtitleFile)
     }
 
     private func backgroundText(_ url: URL, headers: [String: String], in folder: URL, name: String) async throws -> String {
@@ -490,6 +510,15 @@ final class DownloadStore {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
               let size = attributes[.size] as? NSNumber else { return 0 }
         return size.int64Value
+    }
+
+    private func directorySize(_ url: URL) -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey]) else { return fileSize(url) }
+        return enumerator.reduce(Int64.zero) { total, item in
+            guard let file = item as? URL,
+                  let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return total }
+            return total + Int64(size)
+        }
     }
 
 

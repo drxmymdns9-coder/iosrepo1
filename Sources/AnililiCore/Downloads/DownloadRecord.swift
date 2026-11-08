@@ -17,7 +17,7 @@ public struct DownloadRecord: Codable, Identifiable, Hashable, Sendable {
         }
     }
 
-    public enum Kind: String, Codable, Sendable { case hls, mp4 }
+    public enum Kind: String, Codable, Sendable { case hls, hlsAsset, mp4 }
 
     public var media: Media
     public var episode: Int
@@ -57,6 +57,7 @@ public struct DownloadRecord: Codable, Identifiable, Hashable, Sendable {
     public var entryFile: String? {
         switch kind {
         case .hls?: return "index.m3u8"
+        case .hlsAsset?: return "episode.movpkg"
         case .mp4?: return "episode.mp4"
         case nil: return nil
         }

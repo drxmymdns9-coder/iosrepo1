@@ -15,13 +15,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         MainActor.assumeIsolated { HanimeResolver.install() }
         _ = BackgroundDownloadSession.shared
+        _ = HLSAssetDownloadSession.shared
         return true
     }
 
     func application(_ application: UIApplication,
                      handleEventsForBackgroundURLSession identifier: String,
                      completionHandler: @escaping () -> Void) {
-        BackgroundDownloadSession.shared.handleEvents(for: identifier, completionHandler: completionHandler)
+        if identifier == HLSAssetDownloadSession.identifier {
+            HLSAssetDownloadSession.shared.handleEvents(for: identifier, completionHandler: completionHandler)
+        } else {
+            BackgroundDownloadSession.shared.handleEvents(for: identifier, completionHandler: completionHandler)
+        }
     }
 
     /// A phone stays portrait outside the player, which widens this while it's open (see
