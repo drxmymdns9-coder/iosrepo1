@@ -212,9 +212,12 @@ final class DownloadStore {
             let sources = DownloadQueue.attempts(found, preferring: record.preferredSource)
             guard !sources.isEmpty else { throw HTTPError("No downloadable video source was found.") }
             var lastError: Error?
+            var attempted: [String] = []
             for source in sources {
                 guard !Task.isCancelled else { return }
                 do {
+                    attempted.append(source.label)
+                    Log.info("downloads", "\(id): trying \(source.label) [\(source.kind.rawValue), softSub=\(source.softSub), subtitles=\(source.subtitles.count)]")
                     Log.info("downloads", "\(id): saving from \(source.label)")
                     let result: SaveResult
                     switch source.kind {
@@ -222,7 +225,7 @@ final class DownloadStore {
                         do {
                             result = try await saveHLSWithSystemBackground(source, to: folder, id: id)
                         } catch {
-                            Log.warning("downloads", "\(id): native HLS background download failed, using TS fallback: \(Log.describe(error))")
+                            Log.warning("downloads", "\(id): \(source.label) native HLS failed; trying TS fallback: \(Log.describe(error))")
                             result = try await saveHLS(source, to: folder, id: id)
                         }
                     case .mp4: result = try await saveMP4(source, to: folder, id: id)
@@ -250,7 +253,9 @@ final class DownloadStore {
                     Log.warning("downloads", "\(id): \(source.label) failed: \(Log.describe(error))")
                 }
             }
-            throw lastError ?? HTTPError("Every server failed.")
+            let tried = attempted.joined(separator: " | ")
+            let reason = lastError.map(Log.describe) ?? "unknown error"
+            throw HTTPError("Every server failed. Tried: \(tried). Last error: \(reason)")
         } catch {
             guard !Task.isCancelled, records.contains(where: { $0.id == id }) else { return }
             Log.error("downloads", "\(id) failed: \(Log.describe(error))")
