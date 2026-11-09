@@ -159,9 +159,7 @@ extension DetailView {
                 }
                 Menu {
                     Button(DownloadQueue.batchLabel(count: missing.count, audio: audio), systemImage: "arrow.down.circle") {
-                        for episode in missing {
-                            DownloadStore.shared.enqueue(seasonMedia, episode: episode.number, audio: audio, title: episode.title, thumbnail: episode.thumbnail)
-                        }
+                        showingBatchDownload = true
                     }
                     .disabled(missing.isEmpty)
                 } label: {
@@ -172,6 +170,9 @@ extension DetailView {
                         .smokedGlass(.details, in: Circle())
                 }
                 .accessibilityLabel("Download this season")
+                .sheet(isPresented: $showingBatchDownload) {
+                    BatchDownloadOptionsSheet(media: seasonMedia, episodes: missing, audio: audio)
+                }
             }
             Button {
                 showingCover = true

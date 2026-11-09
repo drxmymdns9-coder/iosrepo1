@@ -33,6 +33,7 @@ struct DetailView: View {
     @State var selectedSeason: Int
     @State var listings: [Int: EpisodeState] = [:]
     @State var showingCover = false
+    @State private var showingBatchDownload = false
     @State private var heroBottom: CGFloat = 400
     /// The TV layout's page: its tab (Episodes first, as on Android TV) and episode block.
     @State var televisionTab: Tab = .episodes
@@ -792,6 +793,9 @@ private struct EpisodeBrowser: View {
     }
 
     private func controls(blocks: [EpisodeCatalog.Block], index: Int) -> some View {
+        let missing = (blocks.isEmpty ? [] : blocks[index].episodes).filter {
+            playable.contains($0.number) && DownloadStore.shared.record(mediaID: media.id, episode: $0.number, audio: audio) == nil
+        }
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Picker("Audio", selection: $audio) {
@@ -824,13 +828,8 @@ private struct EpisodeBrowser: View {
                 }
                 .accessibilityLabel(order == "newest" ? "Newest first" : "Oldest first")
                 Menu {
-                    let missing = (blocks.isEmpty ? [] : blocks[index].episodes).filter {
-                        playable.contains($0.number) && DownloadStore.shared.record(mediaID: media.id, episode: $0.number, audio: audio) == nil
-                    }
                     Button(DownloadQueue.batchLabel(count: missing.count, audio: audio), systemImage: "arrow.down.circle") {
-                        for episode in missing {
-                            DownloadStore.shared.enqueue(media, episode: episode.number, audio: audio, title: episode.title, thumbnail: episode.thumbnail)
-                        }
+                        showingBatchDownload = true
                     }
                     .disabled(missing.isEmpty)
                 } label: {
@@ -847,6 +846,9 @@ private struct EpisodeBrowser: View {
                 .accessibilityLabel(layout == "grid" ? "Show as list" : "Show as grid")
             }
             .foregroundStyle(palette.onSurface)
+            .sheet(isPresented: $showingBatchDownload) {
+                BatchDownloadOptionsSheet(media: media, episodes: missing, audio: audio)
+            }
             if blocks.count > 1 && query.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {

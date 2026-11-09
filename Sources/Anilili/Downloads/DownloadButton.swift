@@ -163,4 +163,107 @@ struct DownloadOptionsSheet: View {
         dismiss()
     }
 }
+
+/// Batch choices are based on the intersection of sources resolved for every episode, so one
+/// selected server can be used consistently for the whole season.
+struct BatchDownloadOptionsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+    let media: Media
+    let episodes: [EpisodeInfo]
+    let audio: AudioTrack
+    @AppStorage(DownloadStore.qualityKey) private var quality = "best"
+    @State private var sourceSets: [[VideoSource]] = []
+    @State private var selectedServer: String?
+    @State private var selectedSubtitle = "ar"
+    @State private var loading = true
+    @State private var error: String?
+
+    private var commonServers: [String] {
+        guard let first = sourceSets.first else { return [] }
+        let initial = Set(first.map(\.label))
+        return sourceSets.dropFirst().reduce(initial) { partial, sources in partial.intersection(Set(sources.map(\.label))) }.sorted()
+    }
+
+    private var subtitleChoices: [(String, String)] {
+        let perEpisode = sourceSets.compactMap { set in
+            guard let server = selectedServer, let source = set.first(where: { $0.label == server }) else { return nil }
+            return Set(source.subtitles.map { $0.language.lowercased() })
+        }
+        let common = perEpisode.dropFirst().reduce(perEpisode.first ?? []) { $0.intersection($1) }
+        var result: [(String, String)] = []
+        if common.contains(where: { $0.hasPrefix("ar") }) { result.append(("ar", "العربية")) }
+        if common.contains(where: { $0.hasPrefix("en") }) { result.append(("en", "English")) }
+        return result.isEmpty ? [("ar", "العربية")] : result
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("السيرفر المشترك") {
+                    if loading { ProgressView("جاري فحص جميع الحلقات…") }
+                    else if commonServers.isEmpty { Text(error ?? "لا يوجد سيرفر مشترك قابل للتحميل في جميع الحلقات").foregroundStyle(palette.error) }
+                    else {
+                        ForEach(commonServers, id: \.self) { server in
+                            Button { selectedServer = server } label: {
+                                HStack { Text(server).foregroundStyle(palette.onSurface); Spacer(); if selectedServer == server { Image(systemName: "checkmark").foregroundStyle(palette.primary) } }
+                            }
+                        }
+                    }
+                }
+                Section("الجودة") {
+                    Picker("جودة التحميل", selection: $quality) {
+                        ForEach(DownloadSettings.qualities, id: \.0) { Text($0.label).tag($0.value) }
+                    }
+                }
+                Section("الترجمة المشتركة") {
+                    Picker("لغة الترجمة", selection: $selectedSubtitle) {
+                        ForEach(subtitleChoices, id: \.0) { Text($0.1).tag($0.0) }
+                    }
+                }
+                if !loading && !commonServers.isEmpty {
+                    Section { Text("سيتم تنزيل \(episodes.count) حلقة من السيرفر المحدد فقط.").foregroundStyle(palette.onSurfaceVariant) }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(palette.background)
+            .navigationTitle("تحميل الكل")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("إلغاء") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("تحميل") { start() }.disabled(loading || selectedServer == nil) }
+            }
+        }
+        .tint(palette.primary)
+        .presentationDetents([.medium, .large])
+        .task { await loadSources() }
+        .onChange(of: selectedServer) { _, _ in if !subtitleChoices.contains(where: { $0.0 == selectedSubtitle }) { selectedSubtitle = subtitleChoices.first?.0 ?? "ar" } }
+    }
+
+    private func loadSources() async {
+        var found: [[VideoSource]] = []
+        for episode in episodes {
+            do {
+                let sources = try await SourceHub.shared.sources(for: media, episode: episode.number, audio: audio)
+                found.append(sources.filter { $0.kind != .embed })
+            } catch {
+                self.error = error.localizedDescription
+                found.append([])
+            }
+        }
+        sourceSets = found
+        selectedServer = commonServers.first
+        loading = false
+    }
+
+    private func start() {
+        for episode in episodes {
+            DownloadStore.shared.enqueue(media, episode: episode.number, audio: audio, title: episode.title,
+                                         thumbnail: episode.thumbnail, from: selectedServer,
+                                         subtitleLanguage: selectedSubtitle)
+        }
+        dismiss()
+    }
+}
+
 #endif
