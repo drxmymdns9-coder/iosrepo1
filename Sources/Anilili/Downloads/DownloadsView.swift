@@ -278,11 +278,15 @@ struct DownloadSeriesView: View {
         let audio = record.audio.label
         switch record.state {
         case .done: return "\(audio) · \(DownloadQueue.size(record.bytes))" + (record.source.map { " · \($0)" } ?? "")
-        case .downloading(let fraction): return "\(audio) · Saving \(Int(fraction * 100))%"
-        case .queued: return "\(audio) · Waiting"
-        case .paused: return "\(audio) · Paused · tap to resume"
+        case .downloading(let fraction): return "\(audio) · Saving \(Int(fraction * 100))%" + sizeSuffix(record)
+        case .queued: return "\(audio) · Waiting" + sizeSuffix(record)
+        case .paused: return "\(audio) · Paused" + sizeSuffix(record) + " · tap to resume"
         case .failed(let reason): return "Failed: \(reason) · tap to retry"
         }
+    }
+
+    private func sizeSuffix(_ record: DownloadRecord) -> String {
+        record.bytes > 0 ? " · \(DownloadQueue.size(record.bytes))" : ""
     }
 
     private func statusColor(_ record: DownloadRecord) -> Color {

@@ -334,7 +334,7 @@ final class DownloadStore {
                 try Task.checkCancellation()
                 done += 1
                 bytes += size
-                await self.progress(id, Double(done) / Double(total))
+                await self.progress(id, Double(done) / Double(total), bytes: bytes)
                 if let file = pending.next() {
                     group.addTask { try await Self.fetch(file, into: folder, headers: headers) }
                 }
@@ -508,13 +508,16 @@ final class DownloadStore {
 
     // MARK: - State
 
-    private func progress(_ id: String, _ fraction: Double) {
+    private func progress(_ id: String, _ fraction: Double, bytes: Int64? = nil) {
         // A redraw per percent is plenty.
         guard fraction - (lastProgress[id] ?? -1) >= 0.01 || fraction >= 1 else { return }
         // A report still on its way after a pause must not mark the episode saving again.
         guard case .downloading? = records.first(where: { $0.id == id })?.state else { return }
         lastProgress[id] = fraction
-        update(id) { $0.state = .downloading(fraction) }
+        update(id) {
+            $0.state = .downloading(fraction)
+            if let bytes, bytes > $0.bytes { $0.bytes = bytes }
+        }
         if #available(iOS 16.1, *) {
             let record = records.first(where: { $0.id == id })
             DownloadActivityManager.shared.update(id: id, episode: record?.episode ?? 0,
