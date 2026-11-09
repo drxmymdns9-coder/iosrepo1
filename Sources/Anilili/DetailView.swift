@@ -797,7 +797,7 @@ private struct EpisodeBrowser: View {
         let missing = (blocks.isEmpty ? [] : blocks[index].episodes).filter {
             playable.contains($0.number) && DownloadStore.shared.record(mediaID: media.id, episode: $0.number, audio: audio) == nil
         }
-        VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Picker("Audio", selection: $audio) {
                     Text("Sub").tag(AudioTrack.sub)
