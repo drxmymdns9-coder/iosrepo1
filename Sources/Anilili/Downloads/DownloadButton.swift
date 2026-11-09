@@ -2,6 +2,35 @@
 import AnililiCore
 import SwiftUI
 
+enum DownloadSizeEstimator {
+    static func estimate(_ source: VideoSource, quality: String) async -> Int64? {
+        var headers = source.headers
+        headers["User-Agent"] = headers["User-Agent"] ?? HTTP.safariUserAgent
+        if source.kind == .mp4 {
+            guard let (_, response) = try? await HTTP.data(source.url, method: "HEAD", headers: headers), response.expectedContentLength > 0 else { return nil }
+            return response.expectedContentLength
+        }
+        guard let master = try? await HTTP.text(source.url, headers: headers) else { return nil }
+        let variant = HLSDownload.variant(in: master, base: source.url, maxHeight: Int(quality))
+        let playlistURL = variant ?? source.url
+        let playlist: String
+        if let variant, let selected = try? await HTTP.text(variant, headers: headers) { playlist = selected } else { playlist = master }
+        let plan = HLSDownload.plan(playlist, base: playlistURL)
+        guard plan.duration > 0 else { return nil }
+        let bitrate = fallbackBitrate(for: quality)
+        return Int64(plan.duration * Double(bitrate) / 8.0 * 1.08)
+    }
+
+    private static func fallbackBitrate(for quality: String) -> Int {
+        switch quality { case "1080": return 5_000_000; case "720": return 2_800_000; case "480": return 1_500_000; case "360": return 850_000; default: return 3_000_000 }
+    }
+
+    static func label(_ bytes: Int64?, estimating: Bool = false) -> String {
+        guard let bytes, bytes > 0 else { return estimating ? "جاري حساب الحجم…" : "الحجم غير متاح" }
+        return "≈ \(DownloadQueue.size(bytes))"
+    }
+}
+
 /// An episode row's download control (Android's per-episode button): save, progress ring while
 /// saving (a tap offers pause or stop), a check when saved, a warning to retry after a failure.
 struct DownloadButton: View {
@@ -85,13 +114,15 @@ struct DownloadOptionsSheet: View {
     let media: Media
     let episode: EpisodeInfo
     let audio: AudioTrack
-    var preferredSource: String?
-    @AppStorage(DownloadStore.qualityKey) private var quality = "best"
-    @State private var sources: [VideoSource] = []
-    @State private var selectedServer: String?
-    @State private var selectedSubtitle = "ar"
-    @State private var loading = true
-    @State private var error: String?
+var preferredSource: String?
+@AppStorage(DownloadStore.qualityKey) private var quality = "best"
+@State private var sources: [VideoSource] = []
+@State private var selectedServer: String?
+@State private var selectedSubtitle = "ar"
+@State private var loading = true
+@State private var error: String?
+@State private var estimatedSizes: [String: Int64] = [:]
+@State private var estimating = false
 
     init(media: Media, episode: EpisodeInfo, audio: AudioTrack, preferredSource: String? = nil) {
         self.media = media; self.episode = episode; self.audio = audio; self.preferredSource = preferredSource
@@ -115,7 +146,7 @@ struct DownloadOptionsSheet: View {
                     else {
                         ForEach(sources) { source in
                             Button { selectedServer = source.label } label: {
-                                HStack { Text(source.label).foregroundStyle(palette.onSurface); Spacer(); if selectedServer == source.label { Image(systemName: "checkmark").foregroundStyle(palette.primary) } }
+                                HStack { VStack(alignment: .leading) { Text(source.label).foregroundStyle(palette.onSurface); Text(DownloadSizeEstimator.label(estimatedSizes[source.label], estimating: estimating)).font(AppFont.labelSmall).foregroundStyle(palette.onSurfaceVariant) }; Spacer(); if selectedServer == source.label { Image(systemName: "checkmark").foregroundStyle(palette.primary) } }
                             }
                         }
                     }
@@ -145,15 +176,27 @@ struct DownloadOptionsSheet: View {
         .presentationDetents([.medium, .large])
         .task { await loadSources() }
         .onChange(of: selectedServer) { _, _ in if !subtitleChoices.contains(where: { $0.0 == selectedSubtitle }) { selectedSubtitle = "ar" } }
+        .onChange(of: quality) { _, _ in Task { await estimateSizes() } }
     }
 
     private func loadSources() async {
         do {
-            let found = try await SourceHub.shared.sources(for: media, episode: episode.number, audio: audio)
-            sources = found.filter { $0.kind != .embed }
-            selectedServer = preferredSource.flatMap { value in sources.first { $0.label == value }?.label } ?? sources.first?.label
+let found = try await SourceHub.shared.sources(for: media, episode: episode.number, audio: audio)
+sources = found.filter { $0.kind != .embed }
+selectedServer = preferredSource.flatMap { value in sources.first { $0.label == value }?.label } ?? sources.first?.label
+await estimateSizes()
         } catch let caught { error = caught.localizedDescription }
         loading = false
+    }
+
+    private func estimateSizes() async {
+        estimating = true
+        var values: [String: Int64] = [:]
+        for source in sources {
+            if let size = await DownloadSizeEstimator.estimate(source, quality: quality) { values[source.label] = size }
+        }
+        estimatedSizes = values
+        estimating = false
     }
 
     private func start() {
@@ -178,6 +221,8 @@ struct BatchDownloadOptionsSheet: View {
     @State private var selectedSubtitle = "ar"
     @State private var loading = true
     @State private var error: String?
+    @State private var estimatedTotals: [String: Int64] = [:]
+    @State private var estimating = false
 
     private var commonServers: [String] {
         guard let first = sourceSets.first else { return [] }
@@ -206,7 +251,7 @@ struct BatchDownloadOptionsSheet: View {
                     else {
                         ForEach(commonServers, id: \.self) { server in
                             Button { selectedServer = server } label: {
-                                HStack { Text(server).foregroundStyle(palette.onSurface); Spacer(); if selectedServer == server { Image(systemName: "checkmark").foregroundStyle(palette.primary) } }
+                                HStack { VStack(alignment: .leading) { Text(server).foregroundStyle(palette.onSurface); Text(DownloadSizeEstimator.label(estimatedTotals[server], estimating: estimating)).font(AppFont.labelSmall).foregroundStyle(palette.onSurfaceVariant) }; Spacer(); if selectedServer == server { Image(systemName: "checkmark").foregroundStyle(palette.primary) } }
                             }
                         }
                     }
@@ -238,6 +283,7 @@ struct BatchDownloadOptionsSheet: View {
         .presentationDetents([.medium, .large])
         .task { await loadSources() }
         .onChange(of: selectedServer) { _, _ in if !subtitleChoices.contains(where: { $0.0 == selectedSubtitle }) { selectedSubtitle = subtitleChoices.first?.0 ?? "ar" } }
+        .onChange(of: quality) { _, _ in Task { await estimateTotals() } }
     }
 
     private func loadSources() async {
@@ -253,7 +299,25 @@ struct BatchDownloadOptionsSheet: View {
         }
         sourceSets = found
         selectedServer = commonServers.first
+        await estimateTotals()
         loading = false
+    }
+
+    private func estimateTotals() async {
+        estimating = true
+        var totals: [String: Int64] = [:]
+        for server in commonServers {
+            var total: Int64 = 0
+            var complete = true
+            for set in sourceSets {
+                guard let source = set.first(where: { $0.label == server }),
+                      let size = await DownloadSizeEstimator.estimate(source, quality: quality) else { complete = false; break }
+                total += size
+            }
+            if complete { totals[server] = total }
+        }
+        estimatedTotals = totals
+        estimating = false
     }
 
     private func start() {
