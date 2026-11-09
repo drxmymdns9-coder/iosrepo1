@@ -356,8 +356,16 @@ final class DownloadStore {
             title: "Anilili \(id)",
             to: destination
         )
+        let asset = AVURLAsset(url: package)
+        let duration = try await asset.load(.duration)
+        let seconds = CMTimeGetSeconds(duration)
+        guard seconds.isFinite, seconds > 30 else {
+            throw HTTPError("HLS package is incomplete or too short (\(seconds.isFinite ? Int(seconds) : 0)s).")
+        }
         let subtitleFile = try? await saveSubtitle(source, to: folder)
-        return SaveResult(bytes: directorySize(package), duration: nil, kind: .hlsAsset, subtitleFile: subtitleFile)
+        let bytes = directorySize(package)
+        Log.info("downloads", "\(id): native HLS package validated (\(Int(seconds / 60)) min, \(DownloadQueue.size(bytes)))")
+        return SaveResult(bytes: bytes, duration: seconds, kind: .hlsAsset, subtitleFile: subtitleFile)
     }
 
     private func backgroundText(_ url: URL, headers: [String: String], in folder: URL, name: String) async throws -> String {
