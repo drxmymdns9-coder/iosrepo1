@@ -33,7 +33,7 @@ struct DetailView: View {
     @State var selectedSeason: Int
     @State var listings: [Int: EpisodeState] = [:]
     @State var showingCover = false
-    @State private var showingBatchDownload = false
+    @State var showingBatchDownload = false
     @State private var heroBottom: CGFloat = 400
     /// The TV layout's page: its tab (Episodes first, as on Android TV) and episode block.
     @State var televisionTab: Tab = .episodes
@@ -749,6 +749,7 @@ private struct EpisodeBrowser: View {
     let onPlay: (Int) -> Void
     @State private var query = ""
     @State private var block: Int?
+    @State private var showingBatchDownload = false
 
     private var playable: Set<Int> { Set(listing.available(audio).map(\.number)) }
 

@@ -152,7 +152,7 @@ struct DownloadOptionsSheet: View {
             let found = try await SourceHub.shared.sources(for: media, episode: episode.number, audio: audio)
             sources = found.filter { $0.kind != .embed }
             selectedServer = preferredSource.flatMap { value in sources.first { $0.label == value }?.label } ?? sources.first?.label
-        } catch { error = error.localizedDescription }
+        } catch let caught { error = caught.localizedDescription }
         loading = false
     }
 
@@ -186,7 +186,7 @@ struct BatchDownloadOptionsSheet: View {
     }
 
     private var subtitleChoices: [(String, String)] {
-        let perEpisode = sourceSets.compactMap { set in
+        let perEpisode: [Set<String>] = sourceSets.compactMap { set -> Set<String>? in
             guard let server = selectedServer, let source = set.first(where: { $0.label == server }) else { return nil }
             return Set(source.subtitles.map { $0.language.lowercased() })
         }
