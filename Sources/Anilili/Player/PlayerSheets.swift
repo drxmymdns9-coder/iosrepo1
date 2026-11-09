@@ -270,6 +270,7 @@ private struct ServerDownloadButton: View {
     @Environment(\.palette) private var palette
     let request: PlayRequest
     let source: VideoSource
+    @State private var showingOptions = false
 
     private var store: DownloadStore { .shared }
 
@@ -282,8 +283,7 @@ private struct ServerDownloadButton: View {
         // only an active download is locked while it is in flight.
         let taken = record.map { $0.state.isActive && !mine } ?? false
         Button {
-            store.enqueue(request.media, episode: request.episode, audio: request.audio,
-                          title: request.info?.title, thumbnail: request.info?.thumbnail, from: source.label)
+            showingOptions = true
         } label: {
             ZStack {
                 switch mine ? record?.state : nil {
@@ -311,6 +311,12 @@ private struct ServerDownloadButton: View {
         .disabled(taken)
         .opacity(taken && !mine ? 0.35 : 1)
         .accessibilityLabel(label(record, mine: mine))
+        .sheet(isPresented: $showingOptions) {
+            DownloadOptionsSheet(media: request.media,
+                                 episode: request.info ?? EpisodeInfo(number: request.episode),
+                                 audio: request.audio,
+                                 preferredSource: source.label)
+        }
     }
 
     private func label(_ record: DownloadRecord?, mine: Bool) -> String {

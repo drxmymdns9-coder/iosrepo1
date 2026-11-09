@@ -33,6 +33,8 @@ public struct DownloadRecord: Codable, Identifiable, Hashable, Sendable {
     public var preferredSource: String?
     /// Optional subtitle file saved beside the video for soft-sub sources.
     public var subtitleFile: String?
+    /// The subtitle language selected before this episode was queued.
+    public var subtitleLanguage: String?
     public var bytes: Int64
     public var duration: Double?
     public var createdAt: Date
@@ -45,6 +47,7 @@ public struct DownloadRecord: Codable, Identifiable, Hashable, Sendable {
         self.thumbnail = thumbnail
         self.state = .queued
         self.subtitleFile = nil
+        self.subtitleLanguage = nil
         self.bytes = 0
         self.createdAt = createdAt
     }

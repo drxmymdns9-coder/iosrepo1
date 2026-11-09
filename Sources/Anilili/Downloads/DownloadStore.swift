@@ -75,7 +75,7 @@ final class DownloadStore {
 
     /// `source` is a server the viewer picked (its `VideoSource.label`); without one the queue
     /// tries every server in the order the player would.
-    func enqueue(_ media: Media, episode: Int, audio: AudioTrack, title: String? = nil, thumbnail: URL? = nil, from source: String? = nil) {
+    func enqueue(_ media: Media, episode: Int, audio: AudioTrack, title: String? = nil, thumbnail: URL? = nil, from source: String? = nil, subtitleLanguage: String? = nil) {
         if let existing = record(mediaID: media.id, episode: episode, audio: audio) {
             // A completed copy may have come from a different server. Tapping that server's
             // download button is an explicit choice, so replace the old copy instead of silently
@@ -94,6 +94,7 @@ final class DownloadStore {
         }
         var record = DownloadRecord(media: media, episode: episode, audio: audio, episodeTitle: title, thumbnail: thumbnail)
         record.preferredSource = source
+        record.subtitleLanguage = subtitleLanguage
         records.append(record)
         Log.info("downloads", "queued \(media.id) ep \(episode) \(audio.rawValue)" + (source.map { " from \($0)" } ?? ""))
         save()
@@ -223,12 +224,12 @@ final class DownloadStore {
                     switch source.kind {
                     case .hls:
                         do {
-                            result = try await saveHLSWithSystemBackground(source, to: folder, id: id)
+                            result = try await saveHLSWithSystemBackground(source, to: folder, id: id, subtitleLanguage: record.subtitleLanguage)
                         } catch {
                             Log.warning("downloads", "\(id): \(source.label) native HLS failed; trying TS fallback: \(Log.describe(error))")
-                            result = try await saveHLS(source, to: folder, id: id)
+                            result = try await saveHLS(source, to: folder, id: id, subtitleLanguage: record.subtitleLanguage)
                         }
-                    case .mp4: result = try await saveMP4(source, to: folder, id: id)
+                    case .mp4: result = try await saveMP4(source, to: folder, id: id, subtitleLanguage: record.subtitleLanguage)
                     case .embed: continue
                     }
                     // Paused as the last file landed: it stays paused, and resuming finds every file.
@@ -276,7 +277,7 @@ final class DownloadStore {
         return all
     }
 
-    private func saveHLS(_ source: VideoSource, to folder: URL, id: String) async throws -> SaveResult {
+    private func saveHLS(_ source: VideoSource, to folder: URL, id: String, subtitleLanguage: String?) async throws -> SaveResult {
         let headers = headers(source)
         let top = try await backgroundText(source.url, headers: headers, in: folder, name: ".background-master.m3u8")
         var playlistURL = source.url
@@ -344,11 +345,11 @@ final class DownloadStore {
             try Data(audioPlan!.playlist.utf8).write(to: folder.appendingPathComponent("audio.m3u8"), options: .atomic)
         }
         try Data(indexPlaylist.utf8).write(to: folder.appendingPathComponent("index.m3u8"), options: .atomic)
-        let subtitleFile = try? await saveSubtitle(source, to: folder)
+        let subtitleFile = try? await saveSubtitle(source, to: folder, language: subtitleLanguage)
         return SaveResult(bytes: bytes + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: videoPlan.duration > 0 ? videoPlan.duration : nil, kind: .hls, subtitleFile: subtitleFile)
     }
 
-    private func saveHLSWithSystemBackground(_ source: VideoSource, to folder: URL, id: String) async throws -> SaveResult {
+    private func saveHLSWithSystemBackground(_ source: VideoSource, to folder: URL, id: String, subtitleLanguage: String?) async throws -> SaveResult {
         let destination = folder.appendingPathComponent("episode.movpkg", isDirectory: true)
         let package = try await HLSAssetDownloadSession.shared.download(
             assetURL: source.url,
@@ -362,7 +363,7 @@ final class DownloadStore {
         guard seconds.isFinite, seconds > 30 else {
             throw HTTPError("HLS package is incomplete or too short (\(seconds.isFinite ? Int(seconds) : 0)s).")
         }
-        let subtitleFile = try? await saveSubtitle(source, to: folder)
+        let subtitleFile = try? await saveSubtitle(source, to: folder, language: subtitleLanguage)
         let bytes = directorySize(package)
         Log.info("downloads", "\(id): native HLS package validated (\(Int(seconds / 60)) min, \(DownloadQueue.size(bytes)))")
         return SaveResult(bytes: bytes, duration: seconds, kind: .hlsAsset, subtitleFile: subtitleFile)
@@ -457,7 +458,7 @@ final class DownloadStore {
         }
     }
 
-    private func saveMP4(_ source: VideoSource, to folder: URL, id: String) async throws -> SaveResult {
+    private func saveMP4(_ source: VideoSource, to folder: URL, id: String, subtitleLanguage: String?) async throws -> SaveResult {
         var request = URLRequest(url: source.url)
         for (name, value) in headers(source) { request.setValue(value, forHTTPHeaderField: name) }
         let temporary = folder.appendingPathComponent(".background-episode.mp4")
@@ -466,13 +467,16 @@ final class DownloadStore {
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: temporary, to: target)
         let size = (try? FileManager.default.attributesOfItem(atPath: target.path))?[.size] as? Int64 ?? 0
-        let subtitleFile = try? await saveSubtitle(source, to: folder)
+        let subtitleFile = try? await saveSubtitle(source, to: folder, language: subtitleLanguage)
         return SaveResult(bytes: size + (subtitleFile.map { fileSize(folder.appendingPathComponent($0)) } ?? 0), duration: nil, kind: .mp4, subtitleFile: subtitleFile)
     }
 
     /// Selects Arabic first, then English, and saves one sidecar subtitle for a soft-sub source.
-    private func saveSubtitle(_ source: VideoSource, to folder: URL) async throws -> String? {
-        guard source.softSub, let track = source.subtitles.first(where: {
+    private func saveSubtitle(_ source: VideoSource, to folder: URL, language: String?) async throws -> String? {
+        let requested = language?.lowercased()
+        guard source.softSub, let track = requested.flatMap({ code in
+            source.subtitles.first { $0.language.lowercased().hasPrefix(code) }
+        }) ?? source.subtitles.first(where: {
             $0.language.lowercased().hasPrefix("ar") || $0.label.localizedCaseInsensitiveContains("arab") || $0.label.contains("عرب")
         }) ?? source.subtitles.first(where: { $0.language.lowercased().hasPrefix("en") }) ?? source.subtitles.first else { return nil }
         let ext = track.url.pathExtension.lowercased()
