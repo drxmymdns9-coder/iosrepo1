@@ -59,17 +59,19 @@ jobs:
           apps=("$product_dir"/*.app)
           test "${#apps[@]}" -eq 1
           app="${apps[0]}"
-          test -f "$app/Info.plist"
-          test -x "$app/Anilili"
+          app_name="$(basename "$app")"
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")"
+          test -n "$executable"
+          test -x "$app/$executable"
           rm -rf xtool/ipa
           mkdir -p xtool/ipa/Payload
-          ditto "$app" xtool/ipa/Payload/"$(basename "$app")"
-          test -f xtool/ipa/Payload/Anilili.app/Info.plist
-          test -x xtool/ipa/Payload/Anilili.app/Anilili
+          ditto "$app" "xtool/ipa/Payload/$app_name"
+          test -f "xtool/ipa/Payload/$app_name/Info.plist"
+          test -x "xtool/ipa/Payload/$app_name/$executable"
           (cd xtool/ipa && zip -qryX ../Anilili.ipa Payload)
           test -s xtool/Anilili.ipa
           unzip -t xtool/Anilili.ipa
-          unzip -l xtool/Anilili.ipa | grep -F 'Payload/Anilili.app/Info.plist'
+          unzip -l xtool/Anilili.ipa | grep -F "Payload/$app_name/Info.plist"
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4

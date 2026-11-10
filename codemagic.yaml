@@ -35,17 +35,19 @@ workflows:
           apps=("$product_dir"/*.app)
           test "${#apps[@]}" -eq 1
           app="${apps[0]}"
-          test -f "$app/Info.plist"
-          test -x "$app/Anilili"
+          app_name="$(basename "$app")"
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Info.plist")"
+          test -n "$executable"
+          test -x "$app/$executable"
           rm -rf build/ios/ipa
           mkdir -p build/ios/ipa/Payload
-          ditto "$app" build/ios/ipa/Payload/"$(basename "$app")"
-          test -f build/ios/ipa/Payload/Anilili.app/Info.plist
-          test -x build/ios/ipa/Payload/Anilili.app/Anilili
+          ditto "$app" "build/ios/ipa/Payload/$app_name"
+          test -f "build/ios/ipa/Payload/$app_name/Info.plist"
+          test -x "build/ios/ipa/Payload/$app_name/$executable"
           (cd build/ios/ipa && zip -qryX ../Anilili-unsigned.ipa Payload)
           test -s build/ios/Anilili-unsigned.ipa
           unzip -t build/ios/Anilili-unsigned.ipa
-          unzip -l build/ios/Anilili-unsigned.ipa | grep -F 'Payload/Anilili.app/Info.plist'
+          unzip -l build/ios/Anilili-unsigned.ipa | grep -F "Payload/$app_name/Info.plist"
     artifacts:
       - build/ios/Anilili-unsigned.ipa
       - xcodebuild.log
