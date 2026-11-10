@@ -49,17 +49,27 @@ jobs:
             -destination generic/platform=iOS \
             -derivedDataPath .build/xcode \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             build | tee xcodebuild.log
 
       - name: Package IPA
         run: |
           set -euxo pipefail
-          app=$(find .build/xcode/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
-          test -n "$app"
+          product_dir=.build/xcode/Build/Products/Release-iphoneos
+          apps=("$product_dir"/*.app)
+          test "${#apps[@]}" -eq 1
+          app="${apps[0]}"
+          test -f "$app/Info.plist"
+          test -x "$app/Anilili"
+          rm -rf xtool/ipa
           mkdir -p xtool/ipa/Payload
-          cp -R "$app" xtool/ipa/Payload/
+          ditto "$app" xtool/ipa/Payload/"$(basename "$app")"
+          test -f xtool/ipa/Payload/Anilili.app/Info.plist
+          test -x xtool/ipa/Payload/Anilili.app/Anilili
           (cd xtool/ipa && zip -qryX ../Anilili.ipa Payload)
           test -s xtool/Anilili.ipa
+          unzip -t xtool/Anilili.ipa
+          unzip -l xtool/Anilili.ipa | grep -F 'Payload/Anilili.app/Info.plist'
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4

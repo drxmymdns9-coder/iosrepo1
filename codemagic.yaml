@@ -26,17 +26,26 @@ workflows:
             -destination generic/platform=iOS \
             -derivedDataPath .build/xcode \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             build 2>&1 | tee xcodebuild.log
       - name: Package unsigned IPA
         script: |
           set -euxo pipefail
-          app=$(find .build/xcode/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -n 1)
-          test -n "$app"
+          product_dir=.build/xcode/Build/Products/Release-iphoneos
+          apps=("$product_dir"/*.app)
+          test "${#apps[@]}" -eq 1
+          app="${apps[0]}"
+          test -f "$app/Info.plist"
+          test -x "$app/Anilili"
           rm -rf build/ios/ipa
           mkdir -p build/ios/ipa/Payload
-          cp -R "$app" build/ios/ipa/Payload/
+          ditto "$app" build/ios/ipa/Payload/"$(basename "$app")"
+          test -f build/ios/ipa/Payload/Anilili.app/Info.plist
+          test -x build/ios/ipa/Payload/Anilili.app/Anilili
           (cd build/ios/ipa && zip -qryX ../Anilili-unsigned.ipa Payload)
           test -s build/ios/Anilili-unsigned.ipa
+          unzip -t build/ios/Anilili-unsigned.ipa
+          unzip -l build/ios/Anilili-unsigned.ipa | grep -F 'Payload/Anilili.app/Info.plist'
     artifacts:
       - build/ios/Anilili-unsigned.ipa
       - xcodebuild.log
